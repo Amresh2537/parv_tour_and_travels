@@ -1,5 +1,5 @@
-// Apps Script URL
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby-_m-3G5O8yr3df333wesQn2yCnPdS-eGGAUIHvFQaB2xgqSqaD8ufDRC8c50njF31/exec';
+// lib/api.js - UPDATED WITHOUT FORM SUBMISSION
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxqMMyM9yuq5UppzD8oBcXjqDR0IUYdaPWnTJ_hmVEAkFn1M0YQjUlb1qmNKpLeTDU0/exec';
 
 // Main API function
 export async function apiRequest(data = null, method = 'GET') {
@@ -8,7 +8,6 @@ export async function apiRequest(data = null, method = 'GET') {
     
     let url = APPS_SCRIPT_URL;
     
-    // For GET requests
     if (method === 'GET' && data) {
       const params = new URLSearchParams();
       Object.keys(data).forEach(key => {
@@ -19,7 +18,10 @@ export async function apiRequest(data = null, method = 'GET') {
       url = `${url}?${params.toString()}`;
     }
     
-    // For POST requests - IMPORTANT: Use URLSearchParams
+    const options = {
+      method: method,
+    };
+    
     if (method === 'POST' && data) {
       const formData = new URLSearchParams();
       Object.keys(data).forEach(key => {
@@ -28,55 +30,115 @@ export async function apiRequest(data = null, method = 'GET') {
         }
       });
       
-      // Use fetch with form data
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        body: formData.toString(),
-      });
-      
-      const text = await response.text();
-      console.log('📨 Response:', text);
-      
-      try {
-        const result = JSON.parse(text);
-        return result;
-      } catch (e) {
-        console.error('JSON parse error:', e);
-        return { success: false, error: 'Invalid response' };
-      }
+      options.body = formData.toString();
+      options.headers = {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      };
     }
     
-    // For GET requests
-    const response = await fetch(url);
+    const response = await fetch(url, options);
     const text = await response.text();
     
     try {
-      const result = JSON.parse(text);
-      return result;
+      return JSON.parse(text);
     } catch (e) {
       console.error('JSON parse error:', e);
-      return { success: false, error: 'Invalid response' };
+      return { success: false, error: 'Invalid JSON response', raw: text };
     }
     
   } catch (error) {
-    console.error('🔥 API Error:', error);
+    console.error('API Error:', error);
     return { success: false, error: error.message };
   }
 }
 
+// Form submission (without opening new tab)
+export function submitViaForm(data) {
+  return new Promise((resolve) => {
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = APPS_SCRIPT_URL;
+    // NO form.target = '_blank' - यह नई tab नहीं खोलेगा
+    form.style.display = 'none';
+    
+    Object.keys(data).forEach(key => {
+      const input = document.createElement('input');
+      input.type = 'hidden';
+      input.name = key;
+      input.value = data[key];
+      form.appendChild(input);
+    });
+    
+    document.body.appendChild(form);
+    form.submit();
+    
+    setTimeout(() => {
+      document.body.removeChild(form);
+      resolve({ success: true, message: 'Form submitted' });
+    }, 1000);
+  });
+}
+
 // API functions
 export const bookingApi = {
-  // GET requests
+  ping: () => apiRequest({ action: 'ping' }, 'GET'),
   getAll: () => apiRequest({ action: 'getAll' }, 'GET'),
   getById: (bookingId) => apiRequest({ action: 'getBooking', bookingId }, 'GET'),
-  
-  // POST requests
+  getStats: () => apiRequest({ action: 'getStats' }, 'GET'),
   create: (data) => apiRequest({ action: 'create', ...data }, 'POST'),
   confirm: (bookingId) => apiRequest({ action: 'confirm', bookingId }, 'POST'),
-  addDriver: (bookingId, data) => apiRequest({ action: 'addDriver', bookingId, ...data }, 'POST'),
-  addExpenses: (bookingId, data) => apiRequest({ action: 'addExpenses', bookingId, ...data }, 'POST'),
+  addDriver: (data) => apiRequest({ action: 'addDriver', ...data }, 'POST'),
+  addExpenses: (data) => apiRequest({ action: 'addExpenses', ...data }, 'POST'),
   calculate: (bookingId) => apiRequest({ action: 'calculate', bookingId }, 'POST'),
+  updateStatus: (bookingId, status) => apiRequest({ action: 'updateStatus', bookingId, status }, 'POST'),
 };
+
+// Helper functions - WITHOUT form submission
+export async function createBookingWithForm(bookingData) {
+  // सिर्फ API call करें
+  return await bookingApi.create(bookingData);
+}
+
+export async function updateDriverWithForm(bookingId, driverData) {
+  const data = { action: 'addDriver', bookingId, ...driverData };
+  return await bookingApi.addDriver(data);
+}
+
+export async function updateExpensesWithForm(bookingId, expensesData) {
+  const data = { action: 'addExpenses', bookingId, ...expensesData };
+  return await bookingApi.addExpenses(data);
+}
+
+export function formatCurrency(amount) {
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+    maximumFractionDigits: 0
+  }).format(amount || 0);
+}
+
+// Local storage helpers
+export function saveToLocalStorage(key, data) {
+  try {
+    localStorage.setItem(key, JSON.stringify(data));
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+export function getFromLocalStorage(key) {
+  try {
+    const data = localStorage.getItem(key);
+    return data ? JSON.parse(data) : null;
+  } catch (error) {
+    return null;
+  }
+}
+
+export function clearBookingData() {
+  ['currentBookingId', 'lastBooking', 'driverData', 'expensesData', 'calculations'].forEach(key => {
+    localStorage.removeItem(key);
+  });
+  return { success: true };
+}

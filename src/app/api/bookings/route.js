@@ -1,5 +1,5 @@
 // This is now a proxy to Apps Script
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxIdfdRGKtmJ88cWtpi6ZWfebnAfTuiYgWBv7xYn5EF_bmsEXcQnP6y3jIarIoC4Hbb/exec';
+const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxqMMyM9yuq5UppzD8oBcXjqDR0IUYdaPWnTJ_hmVEAkFn1M0YQjUlb1qmNKpLeTDU0/exec';
 
 export async function GET(request) {
   try {

@@ -18,72 +18,68 @@ export default function BookingForm() {
   });
 
   const handleChange = (e) => {
+    const { name, value } = e.target;
     setFormData({
       ...formData,
-      [e.target.name]: e.target.value
+      [name]: value
     });
   };
 
- const handleSubmit = async (e) => {
-  e.preventDefault();
-  setLoading(true);
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
 
-  try {
-    // Generate booking ID
-    const bookingId = 'PARV' + Date.now().toString().slice(-6);
-    
-    // Save to localStorage
-    const bookingData = {
-      ...formData,
-      bookingId: bookingId,
-      date: new Date().toLocaleDateString('en-IN'),
-      status: 'pending'
-    };
-    
-    localStorage.setItem('currentBookingId', bookingId);
-    localStorage.setItem('lastBooking', JSON.stringify(bookingData));
-    
-    // Submit to Google Sheets WITHOUT opening new window
-    await submitToGoogleSheets(bookingData);
-    
-    alert(`✅ Booking created successfully!\nBooking ID: ${bookingId}`);
-    
-    // Navigate to confirm page
-    router.push('/booking/confirm');
-    
-  } catch (error) {
-    console.error('Error:', error);
-    alert('Booking saved locally. Google Sheets sync may need manual check.');
-    router.push('/booking/confirm');
-  } finally {
-    setLoading(false);
-  }
-};
-
-// Submit to Google Sheets without opening new window
-const submitToGoogleSheets = async (data) => {
-  const formData = new FormData();
-  formData.append('action', 'create');
-  
-  Object.keys(data).forEach(key => {
-    if (key !== 'bookingId') { // bookingId Apps Script खुद generate करेगा
-      formData.append(key, data[key]);
+    try {
+      console.log('Submitting booking form:', formData);
+      
+      // Direct API call - no form submission
+      const result = await bookingApi.create(formData);
+      console.log('Booking API response:', result);
+      
+      if (result.success) {
+        const bookingId = result.bookingId;
+        
+        // Save to localStorage
+        const bookingData = {
+          ...formData,
+          bookingId: bookingId,
+          date: new Date().toLocaleDateString('en-IN'),
+          status: 'pending'
+        };
+        
+        localStorage.setItem('currentBookingId', bookingId);
+        localStorage.setItem('lastBooking', JSON.stringify(bookingData));
+        
+        // Show success message
+        alert(`✅ Booking created successfully!\n\nBooking ID: ${bookingId}\nCustomer: ${formData.customerName}\nAmount: ₹${formData.bookingAmount}`);
+        
+        // Navigate to confirm page
+        router.push('/booking/confirm');
+      } else {
+        alert(`❌ Failed to create booking: ${result.error || 'Unknown error'}`);
+      }
+      
+    } catch (error) {
+      console.error('Booking form error:', error);
+      alert('⚠️ Error creating booking. Data saved locally.');
+      
+      // Generate local booking ID and save
+      const bookingId = 'PARV' + Date.now().toString().slice(-8);
+      const bookingData = {
+        ...formData,
+        bookingId: bookingId,
+        date: new Date().toLocaleDateString('en-IN'),
+        status: 'pending'
+      };
+      
+      localStorage.setItem('currentBookingId', bookingId);
+      localStorage.setItem('lastBooking', JSON.stringify(bookingData));
+      
+      router.push('/booking/confirm');
+    } finally {
+      setLoading(false);
     }
-  });
-  
-  try {
-    // Try fetch with no-cors
-    await fetch('https://script.google.com/macros/s/AKfycbxaaduFrb32moQlbvYCI3yspti0A2OMa-YmjFCzIaYxYPvg2zWP0VCMzL5paKolGtRX/exec', {
-      method: 'POST',
-      mode: 'no-cors',
-      body: formData
-    });
-    
-    console.log('Data submitted to Google Sheets');
-  } catch (error) {
-    console.log('Data submitted (no-cors mode)');
-  }
-};
+  };
 
   return (
     <div className="max-w-2xl mx-auto bg-white rounded-xl shadow-lg p-8">
@@ -91,7 +87,7 @@ const submitToGoogleSheets = async (data) => {
       
       <form onSubmit={handleSubmit} className="space-y-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Form fields remain the same as before */}
+          {/* Customer Name */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Customer Name *
@@ -102,11 +98,12 @@ const submitToGoogleSheets = async (data) => {
               value={formData.customerName}
               onChange={handleChange}
               required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
               placeholder="Enter customer name"
             />
           </div>
 
+          {/* Phone Number */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Phone Number *
@@ -117,11 +114,14 @@ const submitToGoogleSheets = async (data) => {
               value={formData.phone}
               onChange={handleChange}
               required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="Enter phone number"
+              pattern="[0-9]{10}"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+              placeholder="9876543210"
+              title="Please enter 10-digit phone number"
             />
           </div>
 
+          {/* From Location */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               From *
@@ -132,11 +132,12 @@ const submitToGoogleSheets = async (data) => {
               value={formData.from}
               onChange={handleChange}
               required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
               placeholder="Starting location"
             />
           </div>
 
+          {/* To Location */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               To *
@@ -147,11 +148,12 @@ const submitToGoogleSheets = async (data) => {
               value={formData.to}
               onChange={handleChange}
               required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
               placeholder="Destination"
             />
           </div>
 
+          {/* Vehicle Type */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Vehicle Type *
@@ -161,16 +163,20 @@ const submitToGoogleSheets = async (data) => {
               value={formData.vehicle}
               onChange={handleChange}
               required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
             >
               <option value="Innova">Innova</option>
               <option value="Swift">Swift</option>
               <option value="Ertiga">Ertiga</option>
               <option value="Scorpio">Scorpio</option>
+              <option value="Bolero">Bolero</option>
               <option value="Bus">Bus</option>
+              <option value="Tempo">Tempo</option>
+              <option value="Other">Other</option>
             </select>
           </div>
 
+          {/* Booking Amount */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Booking Amount (₹) *
@@ -181,12 +187,15 @@ const submitToGoogleSheets = async (data) => {
               value={formData.bookingAmount}
               onChange={handleChange}
               required
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="Enter amount"
+              min="0"
+              step="100"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+              placeholder="5000"
             />
           </div>
 
-          <div>
+          {/* Advance Payment */}
+          <div className="md:col-span-2">
             <label className="block text-sm font-medium text-gray-700 mb-2">
               Advance Payment (₹)
             </label>
@@ -195,29 +204,74 @@ const submitToGoogleSheets = async (data) => {
               name="advance"
               value={formData.advance}
               onChange={handleChange}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-              placeholder="Advance amount"
+              min="0"
+              step="100"
+              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
+              placeholder="2000"
             />
+            <p className="text-sm text-gray-500 mt-2">
+              Leave empty if no advance payment received
+            </p>
           </div>
         </div>
 
-        <div className="flex justify-end space-x-4 pt-4">
+        {/* Information Box */}
+        <div className="p-4 bg-blue-50 rounded-lg border border-blue-200">
+          <div className="flex items-start">
+            <svg className="w-5 h-5 text-blue-500 mt-0.5 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <div>
+              <p className="text-sm text-blue-700">
+                <strong>Note:</strong> Data will be saved directly to Google Sheets. 
+                No new tabs will open. Check your Google Sheet to verify the booking.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Action Buttons */}
+        <div className="flex justify-end space-x-4 pt-6 border-t">
           <button
             type="button"
             onClick={() => router.push('/')}
-            className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+            className="px-6 py-2.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors font-medium"
           >
             Cancel
           </button>
+          
           <button
             type="submit"
             disabled={loading}
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+            className="px-8 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors font-medium flex items-center"
           >
-            {loading ? 'Creating...' : 'Create Booking'}
+            {loading ? (
+              <>
+                <svg className="animate-spin h-5 w-5 mr-2 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Creating...
+              </>
+            ) : (
+              'Create Booking'
+            )}
           </button>
         </div>
       </form>
+
+      {/* Debug Info (Optional - remove in production) */}
+      <div className="mt-8 p-4 bg-gray-50 rounded-lg border border-gray-200">
+        <details>
+          <summary className="cursor-pointer font-medium text-gray-700">Debug Information</summary>
+          <div className="mt-2">
+            <p className="text-sm text-gray-600 mb-2">Form Data:</p>
+            <pre className="text-xs bg-gray-100 p-2 rounded overflow-auto">
+              {JSON.stringify(formData, null, 2)}
+            </pre>
+          </div>
+        </details>
+      </div>
     </div>
   );
 }

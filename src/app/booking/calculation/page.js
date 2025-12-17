@@ -3,6 +3,7 @@
 import Stepper from '@/components/Stepper';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
+import { bookingApi } from '@/lib/api';
 
 export default function CalculationPage() {
   const router = useRouter();
@@ -25,15 +26,17 @@ export default function CalculationPage() {
     }
     setBookingId(id);
     
+    // Calculate all values
     calculateAll();
-  }, []);
+  }, [router]);
 
   const calculateAll = () => {
-    // Get booking data
+    // Get all data from localStorage
     const bookingData = JSON.parse(localStorage.getItem('lastBooking') || '{}');
     const expensesData = JSON.parse(localStorage.getItem('expensesData') || '{}');
     const driverData = JSON.parse(localStorage.getItem('driverData') || '{}');
     
+    // Calculate amounts
     const bookingAmount = parseFloat(bookingData.bookingAmount) || 0;
     const advance = parseFloat(bookingData.advance) || 0;
     
@@ -70,31 +73,21 @@ export default function CalculationPage() {
     
     try {
       // Submit to Google Sheets
-      const dataToSubmit = {
-        action: 'calculate',
-        bookingId: bookingId
-      };
+      const result = await bookingApi.calculate(bookingId);
       
-      const form = new FormData();
-      Object.keys(dataToSubmit).forEach(key => {
-        form.append(key, dataToSubmit[key]);
-      });
+      if (result.success) {
+        alert('✅ Calculation completed! Data saved to Google Sheets.');
+      } else {
+        alert('⚠️ Calculations saved locally. Google Sheets sync may need manual check.');
+      }
       
-      await fetch('https://script.google.com/macros/s/AKfycbxaaduFrb32moQlbvYCI3yspti0A2OMa-YmjFCzIaYxYPvg2zWP0VCMzL5paKolGtRX/exec', {
-        method: 'POST',
-        mode: 'no-cors',
-        body: form
-      });
-      
-      // Save calculations
+      // Save calculations to localStorage
       localStorage.setItem('calculations', JSON.stringify(calculations));
-      
-      alert('✅ Calculation completed!');
       router.push('/booking/summary');
       
     } catch (error) {
       console.error('Error:', error);
-      alert('Calculations saved locally. Proceeding to summary...');
+      alert('⚠️ Calculations saved locally. Proceeding to summary...');
       localStorage.setItem('calculations', JSON.stringify(calculations));
       router.push('/booking/summary');
     } finally {
@@ -114,7 +107,7 @@ export default function CalculationPage() {
     <div>
       <Stepper />
       <div className="max-w-4xl mx-auto bg-white rounded-xl shadow-lg p-8">
-        <h2 className="text-2xl font-bold text-gray-800 mb-6">Calculation</h2>
+        <h2 className="text-2xl font-bold text-gray-800 mb-6">Trip Calculation</h2>
         
         <div className="mb-8 p-4 bg-blue-50 rounded-lg">
           <p className="font-medium">Booking ID: {bookingId}</p>
@@ -132,15 +125,21 @@ export default function CalculationPage() {
             </h3>
             
             <div className="space-y-4">
-              <div className="flex justify-between items-center p-3 bg-white rounded-lg">
-                <span className="text-gray-700">Booking Amount</span>
+              <div className="flex justify-between items-center p-3 bg-white rounded-lg shadow-sm">
+                <div>
+                  <div className="text-gray-700 font-medium">Booking Amount</div>
+                  <div className="text-sm text-gray-500">Total contract value</div>
+                </div>
                 <span className="text-xl font-bold text-green-600">
                   {formatCurrency(calculations.bookingAmount)}
                 </span>
               </div>
               
-              <div className="flex justify-between items-center p-3 bg-white rounded-lg">
-                <span className="text-gray-700">Advance Received</span>
+              <div className="flex justify-between items-center p-3 bg-white rounded-lg shadow-sm">
+                <div>
+                  <div className="text-gray-700 font-medium">Advance Received</div>
+                  <div className="text-sm text-gray-500">Amount paid in advance</div>
+                </div>
                 <span className="text-lg font-medium text-blue-600">
                   {formatCurrency(calculations.advance)}
                 </span>
@@ -154,19 +153,25 @@ export default function CalculationPage() {
               <svg className="w-5 h-5 mr-2 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              Expenses
+              Expenses & Distance
             </h3>
             
             <div className="space-y-4">
-              <div className="flex justify-between items-center p-3 bg-white rounded-lg">
-                <span className="text-gray-700">Total Expenses</span>
+              <div className="flex justify-between items-center p-3 bg-white rounded-lg shadow-sm">
+                <div>
+                  <div className="text-gray-700 font-medium">Total Expenses</div>
+                  <div className="text-sm text-gray-500">All trip costs</div>
+                </div>
                 <span className="text-xl font-bold text-red-600">
                   {formatCurrency(calculations.totalExpenses)}
                 </span>
               </div>
               
-              <div className="flex justify-between items-center p-3 bg-white rounded-lg">
-                <span className="text-gray-700">Total KM</span>
+              <div className="flex justify-between items-center p-3 bg-white rounded-lg shadow-sm">
+                <div>
+                  <div className="text-gray-700 font-medium">Total Distance</div>
+                  <div className="text-sm text-gray-500">Trip kilometers</div>
+                </div>
                 <span className="text-lg font-medium text-purple-600">
                   {calculations.totalKM} km
                 </span>
@@ -176,17 +181,17 @@ export default function CalculationPage() {
         </div>
 
         {/* Profit Calculation */}
-        <div className="bg-gradient-to-r from-blue-50 to-purple-50 p-8 rounded-lg mb-8">
-          <h3 className="text-xl font-bold text-gray-800 mb-6 text-center">Profit Calculation</h3>
+        <div className="bg-gradient-to-r from-blue-50 to-purple-50 p-8 rounded-lg mb-8 border-2 border-blue-200">
+          <h3 className="text-xl font-bold text-gray-800 mb-6 text-center">Profit & Loss Calculation</h3>
           
           <div className="max-w-md mx-auto space-y-6">
             {/* Net Profit */}
-            <div className={`flex justify-between items-center p-4 rounded-lg ${
-              calculations.netProfit >= 0 ? 'bg-green-100' : 'bg-red-100'
-            }`}>
+            <div className={`flex justify-between items-center p-4 rounded-lg shadow ${
+              calculations.netProfit >= 0 ? 'bg-green-100 border-green-200' : 'bg-red-100 border-red-200'
+            } border-2`}>
               <div>
-                <div className="font-semibold text-gray-700">Net Profit</div>
-                <div className="text-sm text-gray-600">Booking Amount - Total Expenses</div>
+                <div className="font-semibold text-gray-700">Net Profit/Loss</div>
+                <div className="text-sm text-gray-600">Revenue - Total Expenses</div>
               </div>
               <div className={`text-2xl font-bold ${
                 calculations.netProfit >= 0 ? 'text-green-600' : 'text-red-600'
@@ -196,7 +201,7 @@ export default function CalculationPage() {
             </div>
             
             {/* Outstanding */}
-            <div className="flex justify-between items-center p-4 bg-yellow-50 rounded-lg">
+            <div className="flex justify-between items-center p-4 bg-yellow-50 rounded-lg shadow border-2 border-yellow-200">
               <div>
                 <div className="font-semibold text-gray-700">Outstanding Amount</div>
                 <div className="text-sm text-gray-600">To be collected from customer</div>
@@ -208,13 +213,26 @@ export default function CalculationPage() {
             
             {/* Profit Margin */}
             {calculations.bookingAmount > 0 && (
-              <div className="flex justify-between items-center p-4 bg-blue-100 rounded-lg">
+              <div className="flex justify-between items-center p-4 bg-blue-100 rounded-lg shadow border-2 border-blue-200">
                 <div>
                   <div className="font-semibold text-gray-700">Profit Margin</div>
-                  <div className="text-sm text-gray-600">(Profit / Revenue) × 100</div>
+                  <div className="text-sm text-gray-600">(Profit ÷ Revenue) × 100</div>
                 </div>
                 <div className="text-2xl font-bold text-blue-600">
                   {((calculations.netProfit / calculations.bookingAmount) * 100).toFixed(1)}%
+                </div>
+              </div>
+            )}
+            
+            {/* Cost per KM */}
+            {calculations.totalKM > 0 && (
+              <div className="flex justify-between items-center p-4 bg-purple-50 rounded-lg shadow border-2 border-purple-200">
+                <div>
+                  <div className="font-semibold text-gray-700">Cost per Kilometer</div>
+                  <div className="text-sm text-gray-600">Total Expenses ÷ Distance</div>
+                </div>
+                <div className="text-2xl font-bold text-purple-600">
+                  {formatCurrency(calculations.totalExpenses / calculations.totalKM)}
                 </div>
               </div>
             )}
@@ -225,23 +243,23 @@ export default function CalculationPage() {
         <div className="flex justify-between pt-6 border-t">
           <button
             onClick={() => router.push('/booking/expenses')}
-            className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+            className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
           >
-            Back
+            ← Back to Expenses
           </button>
           
           <div className="flex space-x-4">
             <button
               onClick={calculateAll}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
             >
-              Re-calculate
+              ↻ Re-calculate
             </button>
             
             <button
               onClick={handleCalculate}
               disabled={loading}
-              className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center"
+              className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center transition-colors"
             >
               {loading ? (
                 <>
@@ -257,6 +275,25 @@ export default function CalculationPage() {
                 </>
               )}
             </button>
+          </div>
+        </div>
+        
+        {/* Information */}
+        <div className="mt-6 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+          <div className="flex items-start">
+            <svg className="w-5 h-5 text-yellow-600 mt-0.5 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <div>
+              <p className="text-sm text-yellow-800">
+                <strong>Note:</strong> Clicking "Complete Calculation" will:
+              </p>
+              <ul className="text-sm text-yellow-700 mt-1 ml-5 list-disc">
+                <li>Save calculations to your Google Sheet</li>
+                <li>Mark the booking as "completed"</li>
+                <li>Proceed to trip summary page</li>
+              </ul>
+            </div>
           </div>
         </div>
       </div>

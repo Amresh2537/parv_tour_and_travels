@@ -3,6 +3,7 @@
 import Stepper from '@/components/Stepper';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
+import { updateDriverWithForm } from '@/lib/api';
 
 export default function DriverPage() {
   const router = useRouter();
@@ -22,12 +23,11 @@ export default function DriverPage() {
     }
     setBookingId(id);
     
-    // Load saved driver data if any
     const savedDriver = localStorage.getItem('driverData');
     if (savedDriver) {
       setFormData(JSON.parse(savedDriver));
     }
-  }, []);
+  }, [router]);
 
   const handleChange = (e) => {
     setFormData({
@@ -41,33 +41,22 @@ export default function DriverPage() {
     setLoading(true);
 
     try {
-      // Save to localStorage
       localStorage.setItem('driverData', JSON.stringify(formData));
       
-      // Submit to Google Sheets
-      const dataToSubmit = {
-        action: 'addDriver',
-        bookingId: bookingId,
-        ...formData
-      };
+      const result = await updateDriverWithForm(bookingId, formData);
+      console.log('Driver update result:', result);
       
-      const form = new FormData();
-      Object.keys(dataToSubmit).forEach(key => {
-        form.append(key, dataToSubmit[key]);
-      });
+      if (result.success) {
+        alert('✅ Driver assigned! Data saved to Google Sheets.');
+      } else {
+        alert('⚠️ Form submitted. Check Google Sheet.');
+      }
       
-      await fetch('https://script.google.com/macros/s/AKfycbxaaduFrb32moQlbvYCI3yspti0A2OMa-YmjFCzIaYxYPvg2zWP0VCMzL5paKolGtRX/exec', {
-        method: 'POST',
-        mode: 'no-cors',
-        body: form
-      });
-      
-      alert('✅ Driver assigned successfully!');
       router.push('/booking/expenses');
       
     } catch (error) {
       console.error('Error:', error);
-      alert('Driver details saved locally. Proceeding to expenses...');
+      alert('Driver details saved locally.');
       router.push('/booking/expenses');
     } finally {
       setLoading(false);
@@ -82,7 +71,7 @@ export default function DriverPage() {
         
         <div className="mb-8 p-4 bg-blue-50 rounded-lg">
           <p className="font-medium">Booking ID: {bookingId}</p>
-          <p className="text-sm text-gray-600">Assign driver and record starting kilometer reading</p>
+          <p className="text-sm text-gray-600">Assign driver and record starting kilometer</p>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
@@ -112,8 +101,9 @@ export default function DriverPage() {
                 value={formData.driverPhone}
                 onChange={handleChange}
                 required
+                pattern="[0-9]{10}"
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Enter driver phone"
+                placeholder="9876543210"
               />
             </div>
 
@@ -127,12 +117,11 @@ export default function DriverPage() {
                 value={formData.startKM}
                 onChange={handleChange}
                 required
+                min="0"
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="Enter starting KM (e.g., 45000)"
+                placeholder="e.g., 45000"
               />
-              <p className="text-sm text-gray-500 mt-2">
-                Record the odometer reading before trip starts
-              </p>
+              <p className="text-sm text-gray-500 mt-2">Record odometer reading before trip starts</p>
             </div>
           </div>
 
@@ -148,21 +137,9 @@ export default function DriverPage() {
             <button
               type="submit"
               disabled={loading}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 flex items-center"
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
             >
-              {loading ? (
-                <>
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <svg className="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                  </svg>
-                  Assign Driver & Continue
-                </>
-              )}
+              {loading ? 'Saving...' : 'Assign Driver & Continue'}
             </button>
           </div>
         </form>

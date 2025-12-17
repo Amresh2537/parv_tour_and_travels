@@ -1,24 +1,19 @@
 import { Inter } from 'next/font/google';
 import './globals.css';
-import Navbar from '@/components/Navbar';
+import Layout from '@/components/Layout';
 
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata = {
-  title: 'PARV Tour & Travels - SaaS',
-  description: 'Tour and Travel Management System',
+  title: 'PARV Tour & Travels - Booking Management System',
+  description: 'Professional tour and travels booking management system',
 };
 
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
-      <body className={`${inter.className} bg-gray-50`}>
-        <div className="min-h-screen">
-          <Navbar />
-          <main className="container mx-auto px-4 py-8">
-            {children}
-          </main>
-        </div>
+      <body className={inter.className}>
+        <Layout>{children}</Layout>
       </body>
     </html>
   );
