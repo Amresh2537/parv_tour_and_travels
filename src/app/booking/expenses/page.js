@@ -17,8 +17,14 @@ export default function ExpensesPage() {
     otherExpenses: '',
     endKM: ''
   });
+  const [driverData, setDriverData] = useState({}); // Add state for driver data
+  const [isClient, setIsClient] = useState(false); // Track if we're on client
 
   useEffect(() => {
+    // Set client flag
+    setIsClient(true);
+    
+    // Only access localStorage on client side
     const id = localStorage.getItem('currentBookingId');
     if (!id) {
       router.push('/booking/entry');
@@ -26,21 +32,31 @@ export default function ExpensesPage() {
     }
     setBookingId(id);
     
+    // Load saved data
     const savedExpenses = localStorage.getItem('expensesData');
+    const savedDriver = localStorage.getItem('driverData');
+    
     if (savedExpenses) {
       setFormData(JSON.parse(savedExpenses));
+    }
+    
+    if (savedDriver) {
+      setDriverData(JSON.parse(savedDriver));
     }
   }, [router]);
 
   const handleChange = (e) => {
+    const { name, value } = e.target;
     setFormData({
       ...formData,
-      [e.target.name]: e.target.value
+      [name]: value
     });
   };
 
   const calculateFuelCost = () => {
-    return (parseFloat(formData.fuelRate) || 0) * (parseFloat(formData.liters) || 0);
+    const fuelRate = parseFloat(formData.fuelRate) || 0;
+    const liters = parseFloat(formData.liters) || 0;
+    return fuelRate * liters;
   };
 
   const calculateTotalExpenses = () => {
@@ -56,10 +72,10 @@ export default function ExpensesPage() {
     setLoading(true);
 
     try {
+      // Save to localStorage
       localStorage.setItem('expensesData', JSON.stringify(formData));
       
       const result = await updateExpensesWithForm(bookingId, formData);
-      console.log('Expenses update result:', result);
       
       if (result.success) {
         alert('✅ Expenses added! Data saved to Google Sheets.');
@@ -77,6 +93,25 @@ export default function ExpensesPage() {
       setLoading(false);
     }
   };
+
+  // Don't render on server
+  if (!isClient) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-8">
+        <div className="max-w-4xl mx-auto bg-white rounded-xl shadow-lg p-8">
+          <div className="text-center py-12">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="mt-4 text-gray-600">Loading...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const startKM = parseFloat(driverData.startKM) || 0;
+  const endKM = parseFloat(formData.endKM) || 0;
+  const distance = endKM > startKM ? endKM - startKM : 0;
+  const totalExpenses = calculateTotalExpenses();
 
   return (
     <div>
@@ -105,6 +140,7 @@ export default function ExpensesPage() {
                     onChange={handleChange}
                     required
                     min="0"
+                    step="0.01"
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="105.5"
                   />
@@ -121,6 +157,7 @@ export default function ExpensesPage() {
                     onChange={handleChange}
                     required
                     min="0"
+                    step="0.01"
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="45.5"
                   />
@@ -209,13 +246,10 @@ export default function ExpensesPage() {
                 <div className="pt-4 border-t">
                   <div className="text-sm text-gray-600 mb-2">Total Distance</div>
                   <div className="text-lg font-bold text-purple-600">
-                    {(() => {
-                      const driverData = JSON.parse(localStorage.getItem('driverData') || '{}');
-                      const startKM = parseFloat(driverData.startKM) || 0;
-                      const endKM = parseFloat(formData.endKM) || 0;
-                      const distance = endKM - startKM;
-                      return distance > 0 ? `${distance} km` : 'Enter end KM';
-                    })()}
+                    {distance > 0 ? `${distance} km` : 'Enter end KM'}
+                  </div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    Start KM: {startKM || 'Not set'}
                   </div>
                 </div>
               </div>
@@ -246,25 +280,17 @@ export default function ExpensesPage() {
               <div className="bg-white p-4 rounded-lg shadow">
                 <div className="text-sm text-gray-600">Total Expenses</div>
                 <div className="text-2xl font-bold text-red-600">
-                  {formatCurrency(calculateTotalExpenses())}
+                  {formatCurrency(totalExpenses)}
                 </div>
               </div>
               
               <div className="bg-white p-4 rounded-lg shadow">
                 <div className="text-sm text-gray-600">Cost per KM</div>
                 <div className="text-xl font-bold text-purple-600">
-                  {(() => {
-                    const driverData = JSON.parse(localStorage.getItem('driverData') || '{}');
-                    const startKM = parseFloat(driverData.startKM) || 0;
-                    const endKM = parseFloat(formData.endKM) || 0;
-                    const distance = endKM - startKM;
-                    const totalExpenses = calculateTotalExpenses();
-                    
-                    if (distance > 0 && totalExpenses > 0) {
-                      return formatCurrency(totalExpenses / distance);
-                    }
-                    return 'N/A';
-                  })()}
+                  {distance > 0 && totalExpenses > 0 
+                    ? formatCurrency(totalExpenses / distance)
+                    : 'N/A'
+                  }
                 </div>
               </div>
             </div>
