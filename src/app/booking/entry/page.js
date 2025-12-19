@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { createBookingWithForm } from '@/lib/api';
+import { bookingApi } from '@/lib/api';
 
 export default function BookingEntryPage() {
   const router = useRouter();
@@ -31,7 +31,16 @@ export default function BookingEntryPage() {
     try {
       console.log('Submitting booking:', formData);
       
-      const result = await createBookingWithForm(formData);
+      // First test the API
+      const pingResult = await bookingApi.ping();
+      console.log('Ping result:', pingResult);
+      
+      if (!pingResult.success) {
+        throw new Error('API not responding');
+      }
+      
+      // Create booking
+      const result = await bookingApi.create(formData);
       console.log('Booking result:', result);
       
       if (result.success) {
@@ -48,23 +57,60 @@ export default function BookingEntryPage() {
         localStorage.setItem('currentBookingId', bookingId);
         localStorage.setItem('lastBooking', JSON.stringify(bookingData));
         
-        alert(`✅ Booking created successfully!\nBooking ID: ${bookingId}`);
+        // Show notification
+        showNotification(`✅ Booking created successfully! ID: ${bookingId}`);
         router.push('/booking/confirm');
       } else {
-        alert('❌ Failed to create booking: ' + (result.error || 'Unknown error'));
+        showNotification(`❌ Failed to create booking: ${result.error || 'Unknown error'}`, 'error');
       }
       
     } catch (error) {
       console.error('Error:', error);
-      alert('⚠️ Booking saved locally. Please check Google Sheet manually.');
+      showNotification('⚠️ Booking saved locally. Please check Google Sheet manually.', 'warning');
+      
+      // Create a local booking ID for offline use
+      const localBookingId = 'PARV' + Date.now().toString().slice(-8);
+      const bookingData = {
+        ...formData,
+        bookingId: localBookingId,
+        date: new Date().toLocaleDateString('en-IN'),
+        status: 'pending'
+      };
+      
+      localStorage.setItem('currentBookingId', localBookingId);
+      localStorage.setItem('lastBooking', JSON.stringify(bookingData));
+      
       router.push('/booking/confirm');
     } finally {
       setLoading(false);
     }
   };
 
+  const showNotification = (message, type = 'success') => {
+    const notification = document.createElement('div');
+    notification.className = `fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg ${
+      type === 'success' ? 'bg-green-500 text-white' : 
+      type === 'error' ? 'bg-red-500 text-white' : 
+      'bg-yellow-500 text-white'
+    }`;
+    notification.innerHTML = `
+      <div class="flex items-center">
+        <span class="mr-2">${type === 'success' ? '✅' : type === 'error' ? '❌' : '⚠️'}</span>
+        <span>${message}</span>
+      </div>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+      notification.remove();
+    }, 3000);
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-8">
+      <div id="notification-container"></div>
+      
       <div className="max-w-2xl mx-auto bg-white rounded-xl shadow-lg p-8">
         <h2 className="text-2xl font-bold text-gray-800 mb-6">New Booking Entry</h2>
         

@@ -35,7 +35,8 @@ export default function DriverPage() {
     // Load saved data
     const savedDriver = localStorage.getItem('driverData');
     if (savedDriver) {
-      setFormData(JSON.parse(savedDriver));
+      const parsedData = JSON.parse(savedDriver);
+      setFormData(parsedData);
     }
     
     // Load drivers and vehicles from database
@@ -53,6 +54,24 @@ export default function DriverPage() {
           driver => driver.status === 'Available'
         );
         setDrivers(availableDrivers);
+        
+        // If we have saved driverId, pre-select it
+        const savedDriverData = localStorage.getItem('driverData');
+        if (savedDriverData) {
+          const parsed = JSON.parse(savedDriverData);
+          if (parsed.driverId) {
+            const selectedDriver = availableDrivers.find(d => d.driverId === parsed.driverId);
+            if (selectedDriver) {
+              setFormData(prev => ({
+                ...prev,
+                driverId: parsed.driverId,
+                driverName: selectedDriver.name,
+                driverPhone: selectedDriver.phone,
+                selectedDriver
+              }));
+            }
+          }
+        }
       }
       
       // Load available vehicles
@@ -62,6 +81,24 @@ export default function DriverPage() {
           vehicle => vehicle.status === 'Available'
         );
         setVehicles(availableVehicles);
+        
+        // If we have saved vehicleId, pre-select it
+        const savedDriverData = localStorage.getItem('driverData');
+        if (savedDriverData) {
+          const parsed = JSON.parse(savedDriverData);
+          if (parsed.vehicleId) {
+            const selectedVehicle = availableVehicles.find(v => v.vehicleId === parsed.vehicleId);
+            if (selectedVehicle) {
+              setFormData(prev => ({
+                ...prev,
+                vehicleId: parsed.vehicleId,
+                vehicleType: selectedVehicle.type,
+                vehicleAverage: selectedVehicle.average || '12',
+                selectedVehicle
+              }));
+            }
+          }
+        }
       }
       
     } catch (error) {
@@ -133,7 +170,7 @@ export default function DriverPage() {
       }
       
       // Assign driver to booking
-      const result = await bookingApi.assignDriverToBooking({
+      const result = await bookingApi.addDriver({
         bookingId: bookingId,
         driverId: formData.driverId,
         driverName: formData.driverName,
@@ -161,7 +198,24 @@ export default function DriverPage() {
   };
 
   const showNotification = (message, type = 'success') => {
-    // Your notification code here
+    const notification = document.createElement('div');
+    notification.className = `fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg ${
+      type === 'success' ? 'bg-green-500 text-white' : 
+      type === 'warning' ? 'bg-yellow-500 text-white' : 
+      'bg-red-500 text-white'
+    }`;
+    notification.innerHTML = `
+      <div class="flex items-center">
+        <span class="mr-2">${type === 'success' ? '✅' : type === 'warning' ? '⚠️' : '❌'}</span>
+        <span>${message}</span>
+      </div>
+    `;
+    
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+      notification.remove();
+    }, 3000);
   };
 
   if (loadingData) {
@@ -290,11 +344,13 @@ export default function DriverPage() {
                     Vehicle Average (km/L)
                   </label>
                   <input
-                    type="text"
+                    type="number"
                     name="vehicleAverage"
                     value={formData.vehicleAverage}
                     onChange={handleChange}
                     required
+                    step="0.1"
+                    min="0"
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
@@ -328,6 +384,7 @@ export default function DriverPage() {
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               placeholder="Current odometer reading"
             />
+            <p className="text-sm text-gray-500 mt-2">Enter current vehicle odometer reading</p>
           </div>
 
           {/* Calculation Preview */}
@@ -349,15 +406,25 @@ export default function DriverPage() {
               onClick={() => router.push('/booking/confirm')}
               className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
             >
-              Back
+              ← Back
             </button>
             
             <button
               type="submit"
               disabled={loading || !formData.driverId || !formData.vehicleId || !formData.startKM}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
             >
-              {loading ? 'Assigning...' : 'Assign & Continue'}
+              {loading ? (
+                <>
+                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Assigning...
+                </>
+              ) : (
+                'Assign & Continue →'
+              )}
             </button>
           </div>
         </form>
@@ -366,15 +433,23 @@ export default function DriverPage() {
           <p className="font-medium mb-2">Need to manage drivers/vehicles?</p>
           <div className="flex space-x-4">
             <button
+              type="button"
               onClick={() => router.push('/management/drivers')}
-              className="text-blue-600 hover:text-blue-800"
+              className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 flex items-center"
             >
+              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+              </svg>
               Manage Drivers
             </button>
             <button
+              type="button"
               onClick={() => router.push('/management/vehicles')}
-              className="text-blue-600 hover:text-blue-800"
+              className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 flex items-center"
             >
+              <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+              </svg>
               Manage Vehicles
             </button>
           </div>

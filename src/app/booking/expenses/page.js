@@ -1,30 +1,39 @@
 'use client';
 
-import Stepper from '@/components/Stepper';
 import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
-import { updateExpensesWithForm, formatCurrency } from '@/lib/api';
+import { bookingApi, tripCalculator } from '@/lib/api'; // ✅ tripCalculator import
 
 export default function ExpensesPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [bookingId, setBookingId] = useState('');
-  const [formData, setFormData] = useState({
+  
+  // State for trip details
+  const [tripData, setTripData] = useState({
+    vehicle: '',
+    vehicleAverage: '', // ✅ AVERAGE FIELD ADDED
+    startKM: '',
+    endKM: '',
+    tripDate: new Date().toISOString().split('T')[0],
     fuelRate: '',
-    liters: '',
     toll: '',
     driverPayment: '',
     otherExpenses: '',
-    endKM: ''
+    maintenance: '',
+    food: '',
+    parking: ''
   });
-  const [driverData, setDriverData] = useState({}); // Add state for driver data
-  const [isClient, setIsClient] = useState(false); // Track if we're on client
+  
+  // State for calculated values
+  const [calculations, setCalculations] = useState({
+    fuelLiters: 0, // ✅ NEW: CALCULATED LITERS
+    fuelCost: 0,
+    totalExpenses: 0,
+    distance: 0
+  });
 
   useEffect(() => {
-    // Set client flag
-    setIsClient(true);
-    
-    // Only access localStorage on client side
     const id = localStorage.getItem('currentBookingId');
     if (!id) {
       router.push('/booking/entry');
@@ -32,39 +41,65 @@ export default function ExpensesPage() {
     }
     setBookingId(id);
     
-    // Load saved data
-    const savedExpenses = localStorage.getItem('expensesData');
+    // Load saved data from driver page
     const savedDriver = localStorage.getItem('driverData');
-    
-    if (savedExpenses) {
-      setFormData(JSON.parse(savedExpenses));
-    }
+    const savedExpenses = localStorage.getItem('expensesData');
     
     if (savedDriver) {
-      setDriverData(JSON.parse(savedDriver));
+      const driverData = JSON.parse(savedDriver);
+      setTripData(prev => ({
+        ...prev,
+        startKM: driverData.startKM || '',
+        vehicleAverage: driverData.vehicleAverage || '12' // ✅ Load average
+      }));
     }
+    
+    if (savedExpenses) {
+      const expensesData = JSON.parse(savedExpenses);
+      setTripData(prev => ({ ...prev, ...expensesData }));
+    }
+    
+    calculateTotals();
   }, [router]);
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData({
-      ...formData,
-      [name]: value
+  const calculateTotals = () => {
+    const distance = (parseFloat(tripData.endKM) || 0) - (parseFloat(tripData.startKM) || 0);
+    
+    // ✅ NEW: AUTO-CALCULATE FUEL BASED ON AVERAGE
+    let fuelLiters = 0;
+    let fuelCost = 0;
+    
+    if (distance > 0 && tripData.vehicleAverage) {
+      fuelLiters = distance / parseFloat(tripData.vehicleAverage);
+      fuelCost = fuelLiters * (parseFloat(tripData.fuelRate) || 0);
+    }
+    
+    const toll = parseFloat(tripData.toll) || 0;
+    const driverPayment = parseFloat(tripData.driverPayment) || 0;
+    const otherExpenses = parseFloat(tripData.otherExpenses) || 0;
+    const maintenance = parseFloat(tripData.maintenance) || 0;
+    const food = parseFloat(tripData.food) || 0;
+    const parking = parseFloat(tripData.parking) || 0;
+    
+    const total = fuelCost + toll + driverPayment + otherExpenses + maintenance + food + parking;
+    
+    setCalculations({
+      distance: distance > 0 ? distance : 0,
+      fuelLiters: parseFloat(fuelLiters.toFixed(2)),
+      fuelCost: parseFloat(fuelCost.toFixed(2)),
+      totalExpenses: parseFloat(total.toFixed(2))
     });
   };
 
-  const calculateFuelCost = () => {
-    const fuelRate = parseFloat(formData.fuelRate) || 0;
-    const liters = parseFloat(formData.liters) || 0;
-    return fuelRate * liters;
-  };
-
-  const calculateTotalExpenses = () => {
-    const fuelCost = calculateFuelCost();
-    const toll = parseFloat(formData.toll) || 0;
-    const driverPayment = parseFloat(formData.driverPayment) || 0;
-    const otherExpenses = parseFloat(formData.otherExpenses) || 0;
-    return fuelCost + toll + driverPayment + otherExpenses;
+  const handleChange = (e) => {
+    const newData = {
+      ...tripData,
+      [e.target.name]: e.target.value
+    };
+    setTripData(newData);
+    
+    // Recalculate on field change
+    setTimeout(() => calculateTotals(), 100);
   };
 
   const handleSubmit = async (e) => {
@@ -72,111 +107,254 @@ export default function ExpensesPage() {
     setLoading(true);
 
     try {
-      // Save to localStorage
-      localStorage.setItem('expensesData', JSON.stringify(formData));
+      // Save to localStorage with calculated liters
+      const dataToSave = {
+        ...tripData,
+        liters: calculations.fuelLiters, // ✅ Save calculated liters
+        fuelCost: calculations.fuelCost
+      };
       
-      const result = await updateExpensesWithForm(bookingId, formData);
+      localStorage.setItem('expensesData', JSON.stringify(dataToSave));
+      
+      // Prepare data for API
+      const apiData = {
+        bookingId: bookingId,
+        ...tripData,
+        liters: calculations.fuelLiters, // ✅ Send calculated liters
+        fuelCost: calculations.fuelCost,
+        totalExpenses: calculations.totalExpenses,
+        distance: calculations.distance
+      };
+      
+      console.log('Sending trip data to API:', apiData);
+      
+      // Call API
+      const result = await bookingApi.addExpenses(apiData);
       
       if (result.success) {
-        alert('✅ Expenses added! Data saved to Google Sheets.');
+        // Save calculations
+        localStorage.setItem('calculations', JSON.stringify({
+          ...calculations,
+          bookingId: bookingId,
+          timestamp: new Date().toISOString()
+        }));
+        
+        showNotification(`✅ Trip & Expenses saved! Fuel: ${calculations.fuelLiters}L @ ₹${calculations.fuelCost.toFixed(2)}`);
+        
+        setTimeout(() => {
+          router.push('/booking/calculation');
+        }, 1500);
+        
       } else {
-        alert('⚠️ Form submitted. Check Google Sheet.');
+        showNotification(`⚠️ Saved locally. API error: ${result.error || 'Unknown'}`, 'warning');
+        setTimeout(() => {
+          router.push('/booking/calculation');
+        }, 2000);
       }
-      
-      router.push('/booking/calculation');
       
     } catch (error) {
       console.error('Error:', error);
-      alert('Expenses saved locally.');
-      router.push('/booking/calculation');
+      showNotification('⚠️ Trip saved locally only.', 'warning');
+      
+      setTimeout(() => {
+        router.push('/booking/complete');
+      }, 1500);
+      
     } finally {
       setLoading(false);
     }
   };
 
-  // Don't render on server
-  if (!isClient) {
-    return (
-      <div className="min-h-screen bg-gray-50 p-8">
-        <div className="max-w-4xl mx-auto bg-white rounded-xl shadow-lg p-8">
-          <div className="text-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-            <p className="mt-4 text-gray-600">Loading...</p>
-          </div>
-        </div>
+  const showNotification = (message, type = 'success') => {
+    const existing = document.querySelectorAll('.custom-notification');
+    existing.forEach(el => el.remove());
+    
+    const notification = document.createElement('div');
+    notification.className = `custom-notification fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg ${
+      type === 'success' ? 'bg-green-500 text-white' : 
+      type === 'warning' ? 'bg-yellow-500 text-white' : 
+      'bg-red-500 text-white'
+    }`;
+    notification.innerHTML = `
+      <div class="flex items-center">
+        <span class="mr-2">${type === 'success' ? '✅' : type === 'warning' ? '⚠️' : '❌'}</span>
+        <span>${message}</span>
       </div>
-    );
-  }
-
-  const startKM = parseFloat(driverData.startKM) || 0;
-  const endKM = parseFloat(formData.endKM) || 0;
-  const distance = endKM > startKM ? endKM - startKM : 0;
-  const totalExpenses = calculateTotalExpenses();
+    `;
+    
+    document.body.appendChild(notification);
+    
+    setTimeout(() => {
+      if (notification.parentNode) {
+        notification.remove();
+      }
+    }, 3000);
+  };
 
   return (
-    <div>
-      <Stepper />
-      <div className="max-w-4xl mx-auto bg-white rounded-xl shadow-lg p-8">
-        <h2 className="text-2xl font-bold text-gray-800 mb-6">Add Expenses & End KM</h2>
-        
-        <div className="mb-8 p-4 bg-blue-50 rounded-lg">
-          <p className="font-medium">Booking ID: {bookingId}</p>
-          <p className="text-sm text-gray-600">Record trip expenses and ending kilometer reading</p>
+    <div className="min-h-screen bg-gray-50 p-4 md:p-8">
+      <div className="max-w-4xl mx-auto">
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold text-gray-800">Add Trip & Expenses</h1>
+          <p className="text-gray-600">Booking ID: <span className="font-mono font-medium">{bookingId}</span></p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-8">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="md:col-span-2 bg-gray-50 p-6 rounded-lg">
-              <h3 className="text-lg font-semibold text-gray-700 mb-4">Fuel Details</h3>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="bg-white rounded-xl shadow-lg p-6">
+          {/* Summary Card */}
+          <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="text-center">
+                <p className="text-sm text-gray-600">Distance</p>
+                <p className="text-lg font-bold text-blue-600">{calculations.distance} km</p>
+              </div>
+              <div className="text-center">
+                <p className="text-sm text-gray-600">Vehicle Average</p>
+                <p className="text-lg font-bold text-blue-600">{tripData.vehicleAverage || '12'} km/L</p>
+              </div>
+              <div className="text-center">
+                <p className="text-sm text-gray-600">Fuel Required</p>
+                <p className="text-lg font-bold text-blue-600">{calculations.fuelLiters.toFixed(2)} L</p>
+              </div>
+              <div className="text-center">
+                <p className="text-sm text-gray-600">Total Expenses</p>
+                <p className="text-lg font-bold text-red-600">₹{calculations.totalExpenses.toFixed(2)}</p>
+              </div>
+            </div>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-8">
+            {/* 🚗 Trip Details Section */}
+            <div>
+              <h3 className="text-lg font-semibold text-gray-800 mb-4 pb-2 border-b">Trip Details</h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Fuel Rate (₹/liter) *
+                    Vehicle Average *
                   </label>
                   <input
                     type="number"
-                    name="fuelRate"
-                    value={formData.fuelRate}
+                    name="vehicleAverage"
+                    value={tripData.vehicleAverage}
+                    onChange={handleChange}
+                    required
+                    min="1"
+                    step="0.1"
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    placeholder="e.g., 12 km/L"
+                  />
+                  <p className="text-sm text-gray-500 mt-2">Kilometers per liter (from driver page)</p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Start KM Reading *
+                  </label>
+                  <input
+                    type="number"
+                    name="startKM"
+                    value={tripData.startKM}
                     onChange={handleChange}
                     required
                     min="0"
-                    step="0.01"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="105.5"
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    placeholder="e.g., 45000"
                   />
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Liters Purchased *
+                    End KM Reading *
                   </label>
                   <input
                     type="number"
-                    name="liters"
-                    value={formData.liters}
+                    name="endKM"
+                    value={tripData.endKM}
                     onChange={handleChange}
                     required
                     min="0"
-                    step="0.01"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="45.5"
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    placeholder="e.g., 45250"
                   />
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Fuel Cost
-                  </label>
-                  <div className="w-full px-4 py-2 bg-white border border-gray-300 rounded-lg font-medium text-red-600">
-                    {formatCurrency(calculateFuelCost())}
+                <div className="flex items-end">
+                  <div className="w-full p-3 bg-gray-50 rounded-lg border">
+                    <p className="text-sm text-gray-600">Distance Traveled</p>
+                    <p className="text-lg font-bold text-blue-600">
+                      {calculations.distance} km
+                    </p>
                   </div>
                 </div>
               </div>
             </div>
 
-            <div className="bg-gray-50 p-6 rounded-lg">
-              <h3 className="text-lg font-semibold text-gray-700 mb-4">Other Expenses</h3>
-              <div className="space-y-4">
+            {/* ⛽ Fuel Calculation Section */}
+            <div>
+              <h3 className="text-lg font-semibold text-gray-800 mb-4 pb-2 border-b">Fuel Calculation</h3>
+              
+              <div className="bg-yellow-50 p-6 rounded-lg mb-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="text-center">
+                    <p className="text-sm text-gray-600">Formula</p>
+                    <p className="font-medium">
+                      (End KM - Start KM) ÷ Vehicle Average
+                    </p>
+                  </div>
+                  
+                  <div className="text-center">
+                    <p className="text-sm text-gray-600">Calculation</p>
+                    <p className="font-medium">
+                      ({tripData.endKM || 0} - {tripData.startKM || 0}) ÷ {tripData.vehicleAverage || 12}
+                    </p>
+                  </div>
+                  
+                  <div className="text-center">
+                    <p className="text-sm text-gray-600">Fuel Required</p>
+                    <p className="text-xl font-bold text-green-600">
+                      {calculations.fuelLiters.toFixed(2)} Liters
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Fuel Rate (₹ per liter) *
+                  </label>
+                  <input
+                    type="number"
+                    name="fuelRate"
+                    value={tripData.fuelRate}
+                    onChange={handleChange}
+                    required
+                    min="0"
+                    step="0.01"
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    placeholder="e.g., 98.50"
+                  />
+                </div>
+
+                <div className="flex items-end">
+                  <div className="w-full p-4 bg-green-50 rounded-lg border">
+                    <p className="text-sm text-gray-600">Fuel Cost (Auto-calculated)</p>
+                    <p className="text-2xl font-bold text-green-600">
+                      ₹{calculations.fuelCost.toFixed(2)}
+                    </p>
+                    <p className="text-sm text-gray-500">
+                      {calculations.fuelLiters.toFixed(2)}L × ₹{tripData.fuelRate || 0}/L
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 💰 Other Expenses Section */}
+            <div>
+              <h3 className="text-lg font-semibold text-gray-800 mb-4 pb-2 border-b">Other Expenses</h3>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Toll Charges (₹)
@@ -184,26 +362,27 @@ export default function ExpensesPage() {
                   <input
                     type="number"
                     name="toll"
-                    value={formData.toll}
+                    value={tripData.toll}
                     onChange={handleChange}
                     min="0"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="800"
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    placeholder="e.g., 500"
                   />
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Driver Payment (₹)
+                    Driver Payment (₹) *
                   </label>
                   <input
                     type="number"
                     name="driverPayment"
-                    value={formData.driverPayment}
+                    value={tripData.driverPayment}
                     onChange={handleChange}
+                    required
                     min="0"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="1500"
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    placeholder="e.g., 2000"
                   />
                 </div>
 
@@ -214,106 +393,105 @@ export default function ExpensesPage() {
                   <input
                     type="number"
                     name="otherExpenses"
-                    value={formData.otherExpenses}
+                    value={tripData.otherExpenses}
                     onChange={handleChange}
                     min="0"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="500"
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    placeholder="e.g., 300"
                   />
                 </div>
               </div>
             </div>
 
-            <div className="bg-gray-50 p-6 rounded-lg">
-              <h3 className="text-lg font-semibold text-gray-700 mb-4">Kilometer Reading</h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    End KM Reading *
-                  </label>
-                  <input
-                    type="number"
-                    name="endKM"
-                    value={formData.endKM}
-                    onChange={handleChange}
-                    required
-                    min="0"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="45350"
-                  />
-                </div>
+            {/* 📊 Expense Summary */}
+            <div className="bg-gray-50 rounded-lg border p-6">
+              <h4 className="font-medium text-gray-800 mb-4 text-lg">Expense Summary</h4>
+              
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead>
+                    <tr className="bg-gray-100">
+                      <th className="py-3 px-4 text-left text-gray-700">Expense Type</th>
+                      <th className="py-3 px-4 text-left text-gray-700">Amount (₹)</th>
+                      <th className="py-3 px-4 text-left text-gray-700">Details</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    <tr>
+                      <td className="py-3 px-4">Fuel Cost</td>
+                      <td className="py-3 px-4 font-medium">₹{calculations.fuelCost.toFixed(2)}</td>
+                      <td className="py-3 px-4 text-gray-600 text-sm">
+                        {calculations.fuelLiters.toFixed(2)}L @ ₹{tripData.fuelRate || 0}/L
+                      </td>
+                    </tr>
+                    <tr>
+                      <td className="py-3 px-4">Toll Charges</td>
+                      <td className="py-3 px-4 font-medium">₹{tripData.toll || '0'}</td>
+                      <td className="py-3 px-4 text-gray-600 text-sm">Highway tolls</td>
+                    </tr>
+                    <tr>
+                      <td className="py-3 px-4">Driver Payment</td>
+                      <td className="py-3 px-4 font-medium">₹{tripData.driverPayment || '0'}</td>
+                      <td className="py-3 px-4 text-gray-600 text-sm">Driver salary</td>
+                    </tr>
+                    <tr>
+                      <td className="py-3 px-4">Other Expenses</td>
+                      <td className="py-3 px-4 font-medium">₹{tripData.otherExpenses || '0'}</td>
+                      <td className="py-3 px-4 text-gray-600 text-sm">Miscellaneous</td>
+                    </tr>
+                  </tbody>
+                  <tfoot className="bg-gray-800 text-white">
+                    <tr>
+                      <td className="py-4 px-4 font-bold">TOTAL EXPENSES</td>
+                      <td colSpan="2" className="py-4 px-4 text-right font-bold text-xl">
+                        ₹{calculations.totalExpenses.toFixed(2)}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+
+            {/* ✅ Action Buttons */}
+            <div className="flex justify-between pt-6 border-t">
+              <button
+                type="button"
+                onClick={() => router.push('/booking/driver')}
+                className="px-6 py-2.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+              >
+                ← Back to Driver
+              </button>
+              
+              <div className="flex space-x-3">
+                <button
+                  type="button"
+                  onClick={() => router.push('/')}
+                  className="px-6 py-2.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
                 
-                <div className="pt-4 border-t">
-                  <div className="text-sm text-gray-600 mb-2">Total Distance</div>
-                  <div className="text-lg font-bold text-purple-600">
-                    {distance > 0 ? `${distance} km` : 'Enter end KM'}
-                  </div>
-                  <div className="text-xs text-gray-500 mt-1">
-                    Start KM: {startKM || 'Not set'}
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-gradient-to-r from-blue-50 to-purple-50 p-6 rounded-lg">
-            <h3 className="text-xl font-bold text-gray-800 mb-4">Expenses Summary</h3>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="bg-white p-4 rounded-lg shadow">
-                <div className="text-sm text-gray-600">Fuel Cost</div>
-                <div className="text-xl font-bold text-red-600">
-                  {formatCurrency(calculateFuelCost())}
-                </div>
-              </div>
-              
-              <div className="bg-white p-4 rounded-lg shadow">
-                <div className="text-sm text-gray-600">Other Expenses</div>
-                <div className="text-xl font-bold text-red-600">
-                  {formatCurrency(
-                    (parseFloat(formData.toll) || 0) + 
-                    (parseFloat(formData.driverPayment) || 0) + 
-                    (parseFloat(formData.otherExpenses) || 0)
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="px-8 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 flex items-center"
+                >
+                  {loading ? (
+                    <>
+                      <svg className="animate-spin h-5 w-5 mr-2 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Saving Trip...
+                    </>
+                  ) : (
+                    'Save Trip & Expenses →'
                   )}
-                </div>
-              </div>
-              
-              <div className="bg-white p-4 rounded-lg shadow">
-                <div className="text-sm text-gray-600">Total Expenses</div>
-                <div className="text-2xl font-bold text-red-600">
-                  {formatCurrency(totalExpenses)}
-                </div>
-              </div>
-              
-              <div className="bg-white p-4 rounded-lg shadow">
-                <div className="text-sm text-gray-600">Cost per KM</div>
-                <div className="text-xl font-bold text-purple-600">
-                  {distance > 0 && totalExpenses > 0 
-                    ? formatCurrency(totalExpenses / distance)
-                    : 'N/A'
-                  }
-                </div>
+                </button>
               </div>
             </div>
-          </div>
-
-          <div className="flex justify-between pt-6 border-t">
-            <button
-              type="button"
-              onClick={() => router.push('/booking/driver')}
-              className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
-            >
-              Back
-            </button>
-            
-            <button
-              type="submit"
-              disabled={loading}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-            >
-              {loading ? 'Saving...' : 'Save Expenses & Continue'}
-            </button>
-          </div>
-        </form>
+          </form>
+        </div>
       </div>
     </div>
   );
