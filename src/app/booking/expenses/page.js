@@ -102,68 +102,72 @@ export default function ExpensesPage() {
     setTimeout(() => calculateTotals(), 100);
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
+ const handleSubmit = async (e) => {
+  e.preventDefault();
+  setLoading(true);
 
-    try {
-      // Save to localStorage with calculated liters
-      const dataToSave = {
-        ...tripData,
-        liters: calculations.fuelLiters, // ✅ Save calculated liters
-        fuelCost: calculations.fuelCost
-      };
-      
-      localStorage.setItem('expensesData', JSON.stringify(dataToSave));
-      
-      // Prepare data for API
-      const apiData = {
+  try {
+    // Save to localStorage with calculated liters
+    const dataToSave = {
+      ...tripData,
+      liters: calculations.fuelLiters,
+      fuelCost: calculations.fuelCost
+    };
+    
+    localStorage.setItem('expensesData', JSON.stringify(dataToSave));
+    
+    // Prepare data for API
+    const apiData = {
+      bookingId: bookingId,
+      ...tripData,
+      liters: calculations.fuelLiters,
+      fuelCost: calculations.fuelCost,
+      totalExpenses: calculations.totalExpenses,
+      distance: calculations.distance
+    };
+    
+    console.log('Sending trip data to API:', apiData);
+    
+    // Call API
+    const result = await bookingApi.addExpenses(apiData);
+    
+    if (result.success) {
+      // Save calculations
+      localStorage.setItem('calculations', JSON.stringify({
+        ...calculations,
         bookingId: bookingId,
-        ...tripData,
-        liters: calculations.fuelLiters, // ✅ Send calculated liters
-        fuelCost: calculations.fuelCost,
-        totalExpenses: calculations.totalExpenses,
-        distance: calculations.distance
-      };
+        timestamp: new Date().toISOString()
+      }));
       
-      console.log('Sending trip data to API:', apiData);
+      showNotification(`✅ Trip & Expenses saved! Fuel: ${calculations.fuelLiters}L @ ₹${calculations.fuelCost.toFixed(2)}`);
       
-      // Call API
-      const result = await bookingApi.addExpenses(apiData);
-      
-      if (result.success) {
-        // Save calculations
-        localStorage.setItem('calculations', JSON.stringify({
-          ...calculations,
-          bookingId: bookingId,
-          timestamp: new Date().toISOString()
-        }));
-        
-        showNotification(`✅ Trip & Expenses saved! Fuel: ${calculations.fuelLiters}L @ ₹${calculations.fuelCost.toFixed(2)}`);
-        
-        setTimeout(() => {
-          router.push('/booking/calculation');
-        }, 1500);
-        
-      } else {
-        showNotification(`⚠️ Saved locally. API error: ${result.error || 'Unknown'}`, 'warning');
-        setTimeout(() => {
-          router.push('/booking/calculation');
-        }, 2000);
-      }
-      
-    } catch (error) {
-      console.error('Error:', error);
-      showNotification('⚠️ Trip saved locally only.', 'warning');
-      
+      // 🔥 CHANGE THIS: Redirect to calculation page
       setTimeout(() => {
-        router.push('/booking/complete');
+        router.push('/booking/calculation');
       }, 1500);
       
-    } finally {
-      setLoading(false);
+    } else {
+      showNotification(`⚠️ Saved locally. API error: ${result.error || 'Unknown'}`, 'warning');
+      
+      // 🔥 CHANGE THIS: Also redirect to calculation page
+      setTimeout(() => {
+        router.push('/booking/calculation');
+      }, 2000);
     }
-  };
+    
+  } catch (error) {
+    console.error('Error:', error);
+    showNotification('⚠️ Trip saved locally only.', 'warning');
+    
+    // 🔥 CHANGE THIS: Still redirect to calculation page
+    setTimeout(() => {
+      router.push('/booking/calculation');
+    }, 1500);
+    
+  } finally {
+    setLoading(false);
+  }
+};
 
   const showNotification = (message, type = 'success') => {
     const existing = document.querySelectorAll('.custom-notification');
