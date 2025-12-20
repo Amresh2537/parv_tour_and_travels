@@ -132,17 +132,13 @@ export default function DriverPage() {
         });
       }
       
-      // Assign driver to booking
-      const result = await bookingApi.assignDriverToBooking({
-        bookingId: bookingId,
-        driverId: formData.driverId,
-        driverName: formData.driverName,
-        driverPhone: formData.driverPhone,
-        vehicleId: formData.vehicleId,
-        vehicleType: formData.vehicleType,
-        vehicleAverage: formData.vehicleAverage,
-        startKM: formData.startKM
-      });
+   const result = await bookingApi.addDriver({
+  bookingId: bookingId,
+  driverName: formData.driverName,
+  driverPhone: formData.driverPhone,
+  vehicleAverage: formData.vehicleAverage,
+  startKM: formData.startKM
+});
       
       if (result.success) {
         showNotification('✅ Driver and vehicle assigned successfully!');

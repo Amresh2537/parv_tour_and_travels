@@ -84,6 +84,7 @@ export const bookingApi = {
   addVehicle: (data) => apiRequest({ action: 'addVehicle', ...data }, 'POST'),
   updateVehicle: (data) => apiRequest({ action: 'updateVehicle', ...data }, 'POST'),
   deleteVehicle: (vehicleId) => apiRequest({ action: 'deleteVehicle', vehicleId }, 'POST'),
+    assignDriverToBooking: (data) => apiRequest({ action: 'assignDriverToBooking', ...data }, 'POST'),
 };
 // Trip calculator functions
 export const tripCalculator = {
