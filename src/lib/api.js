@@ -78,7 +78,7 @@ export const bookingApi = {
   addDriver: (data) => apiRequest({ action: 'addDriver', ...data }, 'POST'),
   updateDriver: (data) => apiRequest({ action: 'updateDriver', ...data }, 'POST'),
   deleteDriver: (driverId) => apiRequest({ action: 'deleteDriver', driverId }, 'POST'),
-  
+   updateBooking: (data) => apiRequest({ action: 'updateBooking', ...data }, 'POST'),
   // Vehicle Management
   getVehicles: () => apiRequest({ action: 'getVehicles' }, 'GET'),
   addVehicle: (data) => apiRequest({ action: 'addVehicle', ...data }, 'POST'),

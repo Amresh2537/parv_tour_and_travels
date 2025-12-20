@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { bookingApi, tripCalculator, tripStorage } from '@/lib/api';
+import { bookingApi, formatCurrency, formatDate } from '@/lib/api';
 
 export default function EditBookingPage() {
   const router = useRouter();
@@ -11,12 +11,77 @@ export default function EditBookingPage() {
   
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [tripData, setTripData] = useState(null);
-  const [activeTab, setActiveTab] = useState('booking');
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   
-  // Data for dropdowns
-  const [vehicles, setVehicles] = useState([]);
-  const [drivers, setDrivers] = useState([]);
+  // Form data matching Google Sheets columns
+  const [formData, setFormData] = useState({
+    // Booking Details
+    bookingId: '',
+    date: new Date().toISOString().split('T')[0],
+    customerName: '',
+    phone: '',
+    from: '',
+    to: '',
+    vehicle: 'Innova',
+    vehicleAverage: '12',
+    bookingAmount: '',
+    advance: '',
+    status: 'pending',
+    
+    // Driver Details
+    driverName: '',
+    driverPhone: '',
+    startKM: '',
+    endKM: '',
+    totalKM: '',
+    
+    // Fuel Details
+    fuelRate: '',
+    liters: '',
+    fuelCost: '',
+    
+    // Expenses
+    toll: '',
+    driverPayment: '',
+    otherExpenses: '',
+    totalExpenses: '',
+    
+    // Calculations
+    outstanding: '',
+    netProfit: '',
+    
+    // Notes
+    notes: '',
+    
+    // System fields (readonly)
+    createdAt: '',
+    updatedAt: '',
+    statusChangedBy: '',
+    statusChangeDate: ''
+  });
+  
+  // Status options
+  const statusOptions = [
+    { value: 'pending', label: '⏳ Pending' },
+    { value: 'confirmed', label: '✅ Confirmed' },
+    { value: 'driver_assigned', label: '👨‍✈️ Driver Assigned' },
+    { value: 'expenses_added', label: '💰 Expenses Added' },
+    { value: 'completed', label: '🏁 Completed' },
+    { value: 'cancelled', label: '❌ Cancelled' }
+  ];
+  
+  // Vehicle options
+  const vehicleOptions = [
+    { value: 'Innova', label: 'Toyota Innova' },
+    { value: 'Swift Dzire', label: 'Maruti Swift Dzire' },
+    { value: 'Tempo Traveller', label: 'Tempo Traveller' },
+    { value: 'XUV700', label: 'Mahindra XUV700' },
+    { value: 'Scorpio', label: 'Mahindra Scorpio' },
+    { value: 'Ertiga', label: 'Maruti Ertiga' },
+    { value: 'Crysta', label: 'Toyota Innova Crysta' },
+    { value: 'Other', label: 'Other' }
+  ];
 
   useEffect(() => {
     if (bookingId) {
@@ -26,41 +91,67 @@ export default function EditBookingPage() {
 
   const loadBookingData = async () => {
     setLoading(true);
+    setError('');
     try {
       // Load booking details from Google Sheets
       const bookingRes = await bookingApi.getById(bookingId);
       
       if (bookingRes.success && bookingRes.data) {
-        // Your Google Sheets already has all data in one row
-        const combinedData = bookingRes.data;
-        setTripData(combinedData);
+        const booking = bookingRes.data;
         
-        // Load vehicles and drivers (you might want to create separate sheets for these)
-        // For now, using dummy data
-        setVehicles([
-          { id: '1', name: 'Toyota Innova (MH12AB1234)', average: 12 },
-          { id: '2', name: 'Swift Dzire (MH12CD5678)', average: 18 },
-          { id: '3', name: 'Tempo Traveller (MH12EF9012)', average: 8 }
-        ]);
-        
-        setDrivers([
-          { id: '1', name: 'Rajesh Kumar', phone: '9876543210' },
-          { id: '2', name: 'Suresh Patel', phone: '9876543211' },
-          { id: '3', name: 'Amit Sharma', phone: '9876543212' }
-        ]);
+        // Map Google Sheets data to form
+        setFormData({
+          // Booking Details
+          bookingId: booking.bookingId || bookingId,
+          date: booking.date || new Date().toISOString().split('T')[0],
+          customerName: booking.customerName || '',
+          phone: booking.phone || '',
+          from: booking.from || '',
+          to: booking.to || '',
+          vehicle: booking.vehicle || 'Innova',
+          vehicleAverage: booking.vehicleAverage || '12',
+          bookingAmount: booking.bookingAmount || '',
+          advance: booking.advance || '',
+          status: booking.status || 'pending',
+          
+          // Driver Details
+          driverName: booking.driverName || '',
+          driverPhone: booking.driverPhone || '',
+          startKM: booking.startKM || '',
+          endKM: booking.endKM || '',
+          totalKM: booking.totalKM || '',
+          
+          // Fuel Details
+          fuelRate: booking.fuelRate || '',
+          liters: booking.liters || '',
+          fuelCost: booking.fuelCost || '',
+          
+          // Expenses
+          toll: booking.toll || '',
+          driverPayment: booking.driverPayment || '',
+          otherExpenses: booking.otherExpenses || '',
+          totalExpenses: booking.totalExpenses || '',
+          
+          // Calculations
+          outstanding: booking.outstanding || '',
+          netProfit: booking.netProfit || '',
+          
+          // Notes
+          notes: booking.notes || '',
+          
+          // System fields
+          createdAt: booking.createdAt || '',
+          updatedAt: booking.updatedAt || '',
+          statusChangedBy: booking.statusChangedBy || '',
+          statusChangeDate: booking.statusChangeDate || ''
+        });
         
       } else {
-        // Fallback to localStorage
-        const localData = tripStorage.getTrip(bookingId);
-        if (localData) {
-          setTripData(localData);
-        } else {
-          console.error('Booking not found in API or localStorage');
-          // Don't redirect immediately, show the error message
-        }
+        setError('Booking not found in database');
       }
     } catch (error) {
       console.error('Error loading booking:', error);
+      setError('Failed to load booking details');
     } finally {
       setLoading(false);
     }
@@ -69,87 +160,159 @@ export default function EditBookingPage() {
   const handleChange = (e) => {
     const { name, value, type } = e.target;
     
-    setTripData(prev => {
+    setFormData(prev => {
       const updated = { ...prev, [name]: value };
       
-      // If KM readings change, calculate fuel
+      // Calculate total KM if start or end KM changes
       if (name === 'startKM' || name === 'endKM') {
-        const fuelCalc = tripCalculator.calculateFuel(
-          updated.startKM || 0,
-          updated.endKM || 0,
-          12, // Default vehicle average - you should get this from vehicle selection
-          updated.fuelRate || 0
-        );
+        const start = parseFloat(updated.startKM) || 0;
+        const end = parseFloat(updated.endKM) || 0;
+        const distance = end - start;
+        updated.totalKM = distance > 0 ? distance.toString() : '0';
         
-        updated.totalKM = fuelCalc.distance;
-        updated.liters = fuelCalc.liters;
-        updated.fuelCost = fuelCalc.cost;
-        
-        // Recalculate total expenses
-        const expenses = {
-          fuelCost: fuelCalc.cost,
-          tollAmount: updated.toll || 0,
-          driverPayment: updated.driverPayment || 0,
-          otherExpenses: updated.otherExpenses || 0
-        };
-        
-        const totalExp = tripCalculator.calculateTotalExpenses(expenses);
-        updated.totalExpenses = totalExp.total;
+        // Auto-calculate fuel if vehicle average and fuel rate are set
+        if (updated.vehicleAverage && updated.fuelRate) {
+          const avg = parseFloat(updated.vehicleAverage) || 12;
+          const rate = parseFloat(updated.fuelRate) || 0;
+          if (distance > 0 && avg > 0) {
+            const liters = distance / avg;
+            updated.liters = liters.toFixed(2);
+            updated.fuelCost = (liters * rate).toFixed(2);
+          }
+        }
       }
+      
+      // Auto-calculate fuel if vehicle average or fuel rate changes
+      if (name === 'vehicleAverage' || name === 'fuelRate') {
+        const start = parseFloat(updated.startKM) || 0;
+        const end = parseFloat(updated.endKM) || 0;
+        const distance = end - start;
+        
+        if (distance > 0) {
+          const avg = parseFloat(updated.vehicleAverage) || 12;
+          const rate = parseFloat(updated.fuelRate) || 0;
+          
+          if (avg > 0) {
+            const liters = distance / avg;
+            updated.liters = liters.toFixed(2);
+            updated.fuelCost = (liters * rate).toFixed(2);
+          }
+        }
+      }
+      
+      // Recalculate total expenses
+      const fuelCost = parseFloat(updated.fuelCost) || 0;
+      const toll = parseFloat(updated.toll) || 0;
+      const driverPayment = parseFloat(updated.driverPayment) || 0;
+      const otherExpenses = parseFloat(updated.otherExpenses) || 0;
+      updated.totalExpenses = (fuelCost + toll + driverPayment + otherExpenses).toFixed(2);
+      
+      // Recalculate profit and outstanding
+      const bookingAmount = parseFloat(updated.bookingAmount) || 0;
+      const advance = parseFloat(updated.advance) || 0;
+      const totalExp = parseFloat(updated.totalExpenses) || 0;
+      
+      updated.netProfit = (bookingAmount - totalExp).toFixed(2);
+      updated.outstanding = (bookingAmount - advance - totalExp).toFixed(2);
       
       return updated;
     });
   };
 
-  const handleSave = async () => {
+ const handleSubmit = async (e) => {
+  e.preventDefault();
+  setSaving(true);
+  setError('');
+  setSuccess('');
+  
+  try {
+    // Use the updateBooking API directly
+    const updateRes = await bookingApi.updateBooking({
+      bookingId: formData.bookingId,
+      date: formData.date,
+      customerName: formData.customerName,
+      phone: formData.phone,
+      from: formData.from,
+      to: formData.to,
+      vehicle: formData.vehicle,
+      vehicleAverage: formData.vehicleAverage,
+      bookingAmount: formData.bookingAmount,
+      advance: formData.advance,
+      driverName: formData.driverName,
+      driverPhone: formData.driverPhone,
+      startKM: formData.startKM,
+      endKM: formData.endKM,
+      totalKM: formData.totalKM,
+      fuelRate: formData.fuelRate,
+      liters: formData.liters,
+      fuelCost: formData.fuelCost,
+      toll: formData.toll,
+      driverPayment: formData.driverPayment,
+      otherExpenses: formData.otherExpenses,
+      totalExpenses: formData.totalExpenses,
+      outstanding: formData.outstanding,
+      netProfit: formData.netProfit,
+      notes: formData.notes,
+      status: formData.status
+    });
+    
+    console.log('Update response:', updateRes);
+    
+    if (updateRes.success) {
+      setSuccess('✅ Booking updated successfully!');
+      
+      // Reload data to show updated values
+      setTimeout(() => {
+        loadBookingData();
+      }, 1000);
+      
+      // Redirect to dashboard after 2 seconds
+      setTimeout(() => {
+        router.push('/');
+      }, 2000);
+      
+    } else {
+      setError('⚠️ Failed to update booking: ' + (updateRes.error || 'Unknown error'));
+    }
+    
+  } catch (error) {
+    console.error('Error saving booking:', error);
+    setError('⚠️ Failed to update booking. Please try again.');
+  } finally {
+    setSaving(false);
+  }
+};
+
+
+  const handleQuickCalculate = async () => {
     setSaving(true);
     try {
-      // Save to localStorage
-      tripStorage.saveTrip(tripData);
-      
-      // Prepare data for Google Sheets update
-      const updateData = {
-        bookingId: tripData.bookingId,
-        customerName: tripData.customerName,
-        phone: tripData.phone,
-        from: tripData.from,
-        to: tripData.to,
-        vehicle: tripData.vehicle,
-        bookingAmount: tripData.bookingAmount,
-        advance: tripData.advance,
-        driverName: tripData.driverName,
-        driverPhone: tripData.driverPhone,
-        startKM: tripData.startKM,
-        endKM: tripData.endKM,
-        totalKM: tripData.totalKM,
-        fuelRate: tripData.fuelRate,
-        liters: tripData.liters,
-        fuelCost: tripData.fuelCost,
-        toll: tripData.toll,
-        driverPayment: tripData.driverPayment,
-        otherExpenses: tripData.otherExpenses,
-        totalExpenses: tripData.totalExpenses,
-        status: tripData.status || 'pending'
-      };
-      
-      // Note: You'll need to create an 'updateBooking' action in your Google Script
-      // For now, just show success
-      console.log('Would update booking:', updateData);
-      
-      alert('✅ Booking updated successfully!');
-      router.push('/dashboard');
-      
+      const res = await bookingApi.calculate(bookingId);
+      if (res.success) {
+        setSuccess('✅ Profit calculated successfully!');
+        // Reload data
+        await loadBookingData();
+      } else {
+        setError('⚠️ Failed to calculate profit');
+      }
     } catch (error) {
-      console.error('Error saving:', error);
-      alert('⚠️ Error saving booking');
+      setError('⚠️ Error calculating profit');
     } finally {
       setSaving(false);
     }
   };
 
-  const handleCancel = () => {
-    if (confirm('Discard changes?')) {
-      router.push('/dashboard');
+  const handleDelete = async () => {
+    if (confirm('Are you sure you want to delete this booking? This action cannot be undone.')) {
+      try {
+        const res = await bookingApi.cancelBooking(bookingId, 'Deleted via edit page');
+        if (res.success) {
+          alert('✅ Booking deleted successfully!');
+          router.push('/');
+        }
+      } catch (error) {
+        setError('⚠️ Failed to delete booking');
+      }
     }
   };
 
@@ -164,30 +327,12 @@ export default function EditBookingPage() {
     );
   }
 
-  if (!tripData) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-4xl mb-4">❌</div>
-          <h2 className="text-xl font-medium text-gray-800 mb-2">Booking Not Found</h2>
-          <p className="text-gray-600 mb-6">The requested booking does not exist.</p>
-          <button
-            onClick={() => router.push('/dashboard')}
-            className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-          >
-            Back to Dashboard
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-8">
-      <div className="max-w-6xl mx-auto">
+      <div className="max-w-4xl mx-auto">
         {/* Header */}
         <div className="mb-8">
-          <div className="flex flex-col md:flex-row md:items-center justify-between mb-6">
+          <div className="flex items-center justify-between mb-6">
             <div>
               <h1 className="text-3xl font-bold text-gray-800">Edit Booking</h1>
               <p className="text-gray-600 mt-2">
@@ -195,408 +340,494 @@ export default function EditBookingPage() {
               </p>
             </div>
             
-            <div className="mt-4 md:mt-0 flex space-x-3">
+            <div className="flex space-x-2">
               <button
-                onClick={handleCancel}
+                onClick={() => router.push('/')}
                 className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
               >
-                Cancel
-              </button>
-              <button
-                onClick={handleSave}
-                disabled={saving}
-                className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
-              >
-                {saving ? 'Saving...' : 'Save Changes'}
+                ← Dashboard
               </button>
             </div>
           </div>
           
-          {/* Tabs */}
-          <div className="flex space-x-1 bg-white rounded-lg shadow p-1 mb-8">
-            <button
-              onClick={() => setActiveTab('booking')}
-              className={`flex-1 py-3 px-4 rounded-md text-center font-medium ${
-                activeTab === 'booking' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              📋 Booking Details
-            </button>
-            <button
-              onClick={() => setActiveTab('driver')}
-              className={`flex-1 py-3 px-4 rounded-md text-center font-medium ${
-                activeTab === 'driver' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              👨‍✈️ Driver & KM
-            </button>
-            <button
-              onClick={() => setActiveTab('expenses')}
-              className={`flex-1 py-3 px-4 rounded-md text-center font-medium ${
-                activeTab === 'expenses' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              💰 Expenses
-            </button>
-          </div>
+          {/* Success/Error Messages */}
+          {success && (
+            <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg">
+              <p className="text-green-700">{success}</p>
+            </div>
+          )}
+          
+          {error && (
+            <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-red-700">{error}</p>
+            </div>
+          )}
         </div>
         
-        {/* Content */}
-        <div className="bg-white rounded-xl shadow-lg p-6">
-          {/* Booking Details Tab */}
-          {activeTab === 'booking' && (
-            <div className="space-y-6">
-              <h3 className="text-xl font-semibold text-gray-800 mb-4">Customer & Booking Information</h3>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Customer Name *
-                  </label>
-                  <input
-                    type="text"
-                    name="customerName"
-                    value={tripData.customerName || ''}
-                    onChange={handleChange}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Customer Phone *
-                  </label>
-                  <input
-                    type="tel"
-                    name="phone"
-                    value={tripData.phone || ''}
-                    onChange={handleChange}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    From (Pickup) *
-                  </label>
-                  <input
-                    type="text"
-                    name="from"
-                    value={tripData.from || ''}
-                    onChange={handleChange}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    To (Drop) *
-                  </label>
-                  <input
-                    type="text"
-                    name="to"
-                    value={tripData.to || ''}
-                    onChange={handleChange}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Vehicle
-                  </label>
-                  <select
-                    name="vehicle"
-                    value={tripData.vehicle || ''}
-                    onChange={handleChange}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">Choose Vehicle</option>
-                    <option value="Innova">Toyota Innova</option>
-                    <option value="Swift Dzire">Swift Dzire</option>
-                    <option value="Tempo Traveller">Tempo Traveller</option>
-                    <option value="XUV700">XUV700</option>
-                    <option value="Scorpio">Scorpio</option>
-                  </select>
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Booking Amount (₹)
-                  </label>
-                  <input
-                    type="number"
-                    name="bookingAmount"
-                    value={tripData.bookingAmount || ''}
-                    onChange={handleChange}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Advance (₹)
-                  </label>
-                  <input
-                    type="number"
-                    name="advance"
-                    value={tripData.advance || ''}
-                    onChange={handleChange}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Status
-                  </label>
-                  <select
-                    name="status"
-                    value={tripData.status || 'pending'}
-                    onChange={handleChange}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="pending">Pending</option>
-                    <option value="confirmed">Confirmed</option>
-                    <option value="driver_assigned">Driver Assigned</option>
-                    <option value="expenses_added">Expenses Added</option>
-                    <option value="completed">Completed</option>
-                    <option value="cancelled">Cancelled</option>
-                  </select>
-                </div>
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-lg p-6">
+          {/* Booking ID & Date */}
+          <div className="mb-8 p-4 bg-blue-50 rounded-lg">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Booking ID
+                </label>
+                <input
+                  type="text"
+                  value={formData.bookingId}
+                  readOnly
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg bg-gray-50 font-mono"
+                />
               </div>
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Date
+                  Booking Date
                 </label>
                 <input
                   type="date"
                   name="date"
-                  value={tripData.date || ''}
+                  value={formData.date}
                   onChange={handleChange}
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 />
               </div>
             </div>
-          )}
+          </div>
           
-          {/* Driver & KM Tab */}
-          {activeTab === 'driver' && (
-            <div className="space-y-6">
-              <h3 className="text-xl font-semibold text-gray-800 mb-4">Driver & Distance</h3>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Driver Name
-                  </label>
-                  <input
-                    type="text"
-                    name="driverName"
-                    value={tripData.driverName || ''}
-                    onChange={handleChange}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Driver Phone
-                  </label>
-                  <input
-                    type="tel"
-                    name="driverPhone"
-                    value={tripData.driverPhone || ''}
-                    onChange={handleChange}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Start KM
-                  </label>
-                  <input
-                    type="number"
-                    name="startKM"
-                    value={tripData.startKM || ''}
-                    onChange={handleChange}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    End KM
-                  </label>
-                  <input
-                    type="number"
-                    name="endKM"
-                    value={tripData.endKM || ''}
-                    onChange={handleChange}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
+          {/* Customer Details */}
+          <div className="mb-8">
+            <h3 className="text-xl font-semibold text-gray-800 mb-4">👤 Customer Details</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Customer Name *
+                </label>
+                <input
+                  type="text"
+                  name="customerName"
+                  value={formData.customerName}
+                  onChange={handleChange}
+                  required
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                />
               </div>
               
-              {tripData.startKM && tripData.endKM && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Phone Number *
+                </label>
+                <input
+                  type="tel"
+                  name="phone"
+                  value={formData.phone}
+                  onChange={handleChange}
+                  required
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Pickup Location *
+                </label>
+                <input
+                  type="text"
+                  name="from"
+                  value={formData.from}
+                  onChange={handleChange}
+                  required
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Drop Location *
+                </label>
+                <input
+                  type="text"
+                  name="to"
+                  value={formData.to}
+                  onChange={handleChange}
+                  required
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+          </div>
+          
+          {/* Vehicle & Amount */}
+          <div className="mb-8">
+            <h3 className="text-xl font-semibold text-gray-800 mb-4">🚗 Vehicle & Payment</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Vehicle Type
+                </label>
+                <select
+                  name="vehicle"
+                  value={formData.vehicle}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                >
+                  {vehicleOptions.map(option => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Vehicle Average (km/L)
+                </label>
+                <input
+                  type="number"
+                  name="vehicleAverage"
+                  value={formData.vehicleAverage}
+                  onChange={handleChange}
+                  step="0.1"
+                  min="0"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Booking Amount (₹)
+                </label>
+                <input
+                  type="number"
+                  name="bookingAmount"
+                  value={formData.bookingAmount}
+                  onChange={handleChange}
+                  min="0"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Advance Paid (₹)
+                </label>
+                <input
+                  type="number"
+                  name="advance"
+                  value={formData.advance}
+                  onChange={handleChange}
+                  min="0"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+          </div>
+          
+          {/* Driver Details */}
+          <div className="mb-8">
+            <h3 className="text-xl font-semibold text-gray-800 mb-4">👨‍✈️ Driver Details</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Driver Name
+                </label>
+                <input
+                  type="text"
+                  name="driverName"
+                  value={formData.driverName}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Driver Phone
+                </label>
+                <input
+                  type="tel"
+                  name="driverPhone"
+                  value={formData.driverPhone}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Start KM Reading
+                </label>
+                <input
+                  type="number"
+                  name="startKM"
+                  value={formData.startKM}
+                  onChange={handleChange}
+                  min="0"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  End KM Reading
+                </label>
+                <input
+                  type="number"
+                  name="endKM"
+                  value={formData.endKM}
+                  onChange={handleChange}
+                  min="0"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              
+              <div className="md:col-span-2">
                 <div className="p-4 bg-blue-50 rounded-lg">
-                  <p className="text-sm text-gray-600">Distance Calculated:</p>
+                  <p className="text-sm text-gray-600">Distance Traveled:</p>
                   <p className="text-2xl font-bold text-blue-600">
-                    {tripData.totalKM || 0} km
+                    {formData.totalKM || 0} km
                   </p>
                 </div>
-              )}
+              </div>
+            </div>
+          </div>
+          
+          {/* Fuel & Expenses */}
+          <div className="mb-8">
+            <h3 className="text-xl font-semibold text-gray-800 mb-4">⛽ Fuel & Expenses</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Fuel Rate (₹/liter)
+                </label>
+                <input
+                  type="number"
+                  name="fuelRate"
+                  value={formData.fuelRate}
+                  onChange={handleChange}
+                  step="0.01"
+                  min="0"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Fuel Used (liters)
+                </label>
+                <input
+                  type="number"
+                  name="liters"
+                  value={formData.liters}
+                  onChange={handleChange}
+                  step="0.01"
+                  min="0"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Fuel Cost (₹)
+                </label>
+                <input
+                  type="number"
+                  name="fuelCost"
+                  value={formData.fuelCost}
+                  onChange={handleChange}
+                  min="0"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Toll Charges (₹)
+                </label>
+                <input
+                  type="number"
+                  name="toll"
+                  value={formData.toll}
+                  onChange={handleChange}
+                  min="0"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Driver Payment (₹)
+                </label>
+                <input
+                  type="number"
+                  name="driverPayment"
+                  value={formData.driverPayment}
+                  onChange={handleChange}
+                  min="0"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Other Expenses (₹)
+                </label>
+                <input
+                  type="number"
+                  name="otherExpenses"
+                  value={formData.otherExpenses}
+                  onChange={handleChange}
+                  min="0"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              
+              <div className="md:col-span-2">
+                <div className="p-4 bg-yellow-50 rounded-lg">
+                  <p className="text-sm text-gray-600">Total Expenses:</p>
+                  <p className="text-2xl font-bold">
+                    ₹{formData.totalExpenses || '0'}
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          {/* Status & Notes */}
+          <div className="mb-8">
+            <h3 className="text-xl font-semibold text-gray-800 mb-4">📊 Status & Notes</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Booking Status
+                </label>
+                <select
+                  name="status"
+                  value={formData.status}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                >
+                  {statusOptions.map(option => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Notes
+                </label>
+                <textarea
+                  name="notes"
+                  value={formData.notes}
+                  onChange={handleChange}
+                  rows="3"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  placeholder="Additional notes about this booking..."
+                />
+              </div>
+            </div>
+          </div>
+          
+          {/* Calculations Summary */}
+          {formData.bookingAmount && (
+            <div className="mb-8 p-6 bg-green-50 rounded-lg">
+              <h3 className="text-xl font-semibold text-gray-800 mb-4">💰 Profit Calculation</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="text-center p-4 bg-white rounded-lg">
+                  <p className="text-sm text-gray-600">Booking Amount</p>
+                  <p className="text-2xl font-bold text-green-600">
+                    ₹{formData.bookingAmount}
+                  </p>
+                </div>
+                
+                <div className="text-center p-4 bg-white rounded-lg">
+                  <p className="text-sm text-gray-600">Total Expenses</p>
+                  <p className="text-2xl font-bold text-red-600">
+                    ₹{formData.totalExpenses || '0'}
+                  </p>
+                </div>
+                
+                <div className="text-center p-4 bg-white rounded-lg border-2 border-green-300">
+                  <p className="text-sm text-gray-600">Net Profit</p>
+                  <p className="text-3xl font-bold text-green-700">
+                    ₹{formData.netProfit || '0'}
+                  </p>
+                </div>
+                
+                <div className="md:col-span-3 text-center p-4 bg-white rounded-lg">
+                  <p className="text-sm text-gray-600">Outstanding Amount</p>
+                  <p className={`text-2xl font-bold ${parseFloat(formData.outstanding) > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                    ₹{formData.outstanding || '0'}
+                  </p>
+                </div>
+              </div>
             </div>
           )}
           
-          {/* Expenses Tab */}
-          {activeTab === 'expenses' && (
-            <div className="space-y-6">
-              <h3 className="text-xl font-semibold text-gray-800 mb-4">Expenses Management</h3>
-              
-              {/* Fuel Calculation */}
-              <div className="bg-yellow-50 p-6 rounded-lg mb-6">
-                <h4 className="font-medium text-gray-700 mb-4">⛽ Fuel Calculation</h4>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Fuel Rate (₹ per liter)
-                    </label>
-                    <input
-                      type="number"
-                      name="fuelRate"
-                      value={tripData.fuelRate || ''}
-                      onChange={handleChange}
-                      step="0.01"
-                      min="0"
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  
-                  <div className="flex items-center justify-center">
-                    <div className="text-center">
-                      <p className="text-sm text-gray-600">Fuel Cost</p>
-                      <p className="text-2xl font-bold">
-                        ₹{tripData.fuelCost || '0'}
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        {tripData.liters || '0'} liters
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              
-              {/* Other Expenses */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Toll Charges (₹)
-                  </label>
-                  <input
-                    type="number"
-                    name="toll"
-                    value={tripData.toll || ''}
-                    onChange={handleChange}
-                    min="0"
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Driver Payment (₹)
-                  </label>
-                  <input
-                    type="number"
-                    name="driverPayment"
-                    value={tripData.driverPayment || ''}
-                    onChange={handleChange}
-                    min="0"
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Other Expenses (₹)
-                  </label>
-                  <input
-                    type="number"
-                    name="otherExpenses"
-                    value={tripData.otherExpenses || ''}
-                    onChange={handleChange}
-                    min="0"
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                
-                <div className="flex items-end">
-                  <div className="w-full p-4 bg-gray-100 rounded-lg">
-                    <p className="text-sm text-gray-600">Total Expenses</p>
-                    <p className="text-xl font-bold">
-                      ₹{tripData.totalExpenses || '0'}
-                    </p>
-                  </div>
-                </div>
-              </div>
-              
-              {/* Calculations */}
-              {tripData.bookingAmount && (
-                <div className="p-4 bg-green-50 rounded-lg">
-                  <h4 className="font-medium text-gray-700 mb-3">💰 Profit Calculation</h4>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-sm text-gray-600">Booking Amount</p>
-                      <p className="text-lg font-bold">₹{tripData.bookingAmount}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-600">Total Expenses</p>
-                      <p className="text-lg font-bold">₹{tripData.totalExpenses || '0'}</p>
-                    </div>
-                    <div className="col-span-2 pt-4 border-t">
-                      <p className="text-sm text-gray-600">Net Profit</p>
-                      <p className="text-2xl font-bold text-green-600">
-                        ₹{(parseFloat(tripData.bookingAmount) - parseFloat(tripData.totalExpenses || 0)).toFixed(2)}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
+          {/* System Info */}
+          {formData.createdAt && (
+            <div className="mb-8 p-4 bg-gray-100 rounded-lg text-sm text-gray-600">
+              <p>Created: {formatDate(formData.createdAt)}</p>
+              <p>Last Updated: {formatDate(formData.updatedAt)}</p>
+              <p>Status Last Changed: {formatDate(formData.statusChangeDate)} by {formData.statusChangedBy || 'system'}</p>
             </div>
           )}
           
-          {/* Bottom Actions */}
-          <div className="pt-8 mt-8 border-t">
-            <div className="flex justify-between">
-              <button
-                onClick={() => router.push('/dashboard')}
-                className="px-6 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
-              >
-                ← Back to Dashboard
-              </button>
+          {/* Action Buttons */}
+          <div className="pt-8 border-t">
+            <div className="flex flex-col md:flex-row justify-between space-y-4 md:space-y-0">
+              <div className="flex space-x-3">
+                <button
+                  type="button"
+                  onClick={() => router.push('/')}
+                  className="px-6 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                
+                <button
+                  type="button"
+                  onClick={handleQuickCalculate}
+                  disabled={saving}
+                  className="px-6 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                >
+                  Recalculate Profit
+                </button>
+                
+                <button
+                  type="button"
+                  onClick={handleDelete}
+                  className="px-6 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700"
+                >
+                  Delete Booking
+                </button>
+              </div>
               
               <div className="flex space-x-3">
                 <button
-                  onClick={handleCancel}
-                  className="px-6 py-2.5 border border-red-300 text-red-600 rounded-lg hover:bg-red-50"
+                  type="button"
+                  onClick={() => router.push(`/booking/summary/${bookingId}`)}
+                  className="px-6 py-2.5 border border-blue-300 text-blue-600 rounded-lg hover:bg-blue-50"
                 >
-                  Discard Changes
+                  View Summary
                 </button>
+                
                 <button
-                  onClick={handleSave}
+                  type="submit"
                   disabled={saving}
                   className="px-8 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
                 >
-                  {saving ? 'Saving...' : 'Save All Changes'}
+                  {saving ? 'Saving...' : 'Save Changes'}
                 </button>
               </div>
             </div>
           </div>
-        </div>
+        </form>
       </div>
     </div>
   );
