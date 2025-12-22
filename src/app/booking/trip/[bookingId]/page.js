@@ -431,7 +431,7 @@ export default function BookingTripPage() {
                 {/* Receipt Header */}
                 <div className="text-center mb-8">
                   <div className="text-3xl font-bold text-blue-600 mb-2">PARV TOUR & TRAVELS</div>
-                  <div className="text-sm text-gray-600">Contact: +91 9999999999 | GSTIN: 07AABCP1234M1Z5</div>
+                  <div className="text-sm text-gray-600">Contact:+91 70049 53761| GSTIN: 07AABCP1234M1Z5</div>
                   <div className="text-sm text-gray-600">Trip Receipt • #{booking.bookingId}</div>
                 </div>
 
@@ -561,7 +561,7 @@ export default function BookingTripPage() {
                 <div className="mt-8 pt-6 border-t border-gray-300 text-center text-xs text-gray-500">
                   <div className="mb-3">
                     <div className="font-semibold text-gray-700">Thank you for choosing PARV TOUR & TRAVELS!</div>
-                    <div className="mt-1">For any queries, contact: +91 9999999999</div>
+                    <div className="mt-1">For any queries, contact:+91 70049 53761</div>
                   </div>
                   <div className="text-xs">
                     <div>GSTIN: 07AABCP1234M1Z5</div>
