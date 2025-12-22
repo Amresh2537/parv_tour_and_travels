@@ -14,6 +14,11 @@ export default function EditBookingPage() {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   
+  // Dynamic dropdown data
+  const [vehicles, setVehicles] = useState([]);
+  const [drivers, setDrivers] = useState([]);
+  const [loadingDropdowns, setLoadingDropdowns] = useState(true);
+  
   // Form data matching Google Sheets columns
   const [formData, setFormData] = useState({
     // Booking Details
@@ -70,36 +75,30 @@ export default function EditBookingPage() {
     { value: 'completed', label: '🏁 Completed' },
     { value: 'cancelled', label: '❌ Cancelled' }
   ];
-  
-  // Vehicle options
-  const vehicleOptions = [
-    { value: 'Innova', label: 'Toyota Innova' },
-    { value: 'Swift Dzire', label: 'Maruti Swift Dzire' },
-    { value: 'Tempo Traveller', label: 'Tempo Traveller' },
-    { value: 'XUV700', label: 'Mahindra XUV700' },
-    { value: 'Scorpio', label: 'Mahindra Scorpio' },
-    { value: 'Ertiga', label: 'Maruti Ertiga' },
-    { value: 'Crysta', label: 'Toyota Innova Crysta' },
-    { value: 'Other', label: 'Other' }
-  ];
 
   useEffect(() => {
     if (bookingId) {
-      loadBookingData();
+      loadAllData();
     }
   }, [bookingId]);
 
-  const loadBookingData = async () => {
+  const loadAllData = async () => {
     setLoading(true);
+    setLoadingDropdowns(true);
     setError('');
+    
     try {
-      // Load booking details from Google Sheets
-      const bookingRes = await bookingApi.getById(bookingId);
+      // Load dropdown data in parallel
+      const [bookingRes, driversRes, vehiclesRes] = await Promise.all([
+        bookingApi.getById(bookingId),
+        bookingApi.getDrivers(),
+        bookingApi.getVehicles()
+      ]);
       
+      // Load booking details
       if (bookingRes.success && bookingRes.data) {
         const booking = bookingRes.data;
         
-        // Map Google Sheets data to form
         setFormData({
           // Booking Details
           bookingId: booking.bookingId || bookingId,
@@ -145,15 +144,30 @@ export default function EditBookingPage() {
           statusChangedBy: booking.statusChangedBy || '',
           statusChangeDate: booking.statusChangeDate || ''
         });
-        
       } else {
         setError('Booking not found in database');
       }
+      
+      // Load drivers data
+      if (driversRes.success && driversRes.data) {
+        setDrivers(driversRes.data);
+      } else {
+        console.warn('Could not load drivers from database');
+      }
+      
+      // Load vehicles data
+      if (vehiclesRes.success && vehiclesRes.data) {
+        setVehicles(vehiclesRes.data);
+      } else {
+        console.warn('Could not load vehicles from database');
+      }
+      
     } catch (error) {
-      console.error('Error loading booking:', error);
+      console.error('Error loading data:', error);
       setError('Failed to load booking details');
     } finally {
       setLoading(false);
+      setLoadingDropdowns(false);
     }
   };
 
@@ -162,6 +176,27 @@ export default function EditBookingPage() {
     
     setFormData(prev => {
       const updated = { ...prev, [name]: value };
+      
+      // If vehicle selection changes, update vehicle average
+      if (name === 'vehicle') {
+        const selectedVehicle = vehicles.find(v => 
+          v.type === value || v.vehicleId === value || v.number === value
+        );
+        if (selectedVehicle && selectedVehicle.average) {
+          updated.vehicleAverage = selectedVehicle.average.toString();
+        }
+      }
+      
+      // If driver selection changes, update driver details
+      if (name === 'driverName') {
+        const selectedDriver = drivers.find(d => 
+          d.name === value || d.driverId === value
+        );
+        if (selectedDriver) {
+          updated.driverName = selectedDriver.name;
+          updated.driverPhone = selectedDriver.phone || '';
+        }
+      }
       
       // Calculate total KM if start or end KM changes
       if (name === 'startKM' || name === 'endKM') {
@@ -219,70 +254,69 @@ export default function EditBookingPage() {
     });
   };
 
- const handleSubmit = async (e) => {
-  e.preventDefault();
-  setSaving(true);
-  setError('');
-  setSuccess('');
-  
-  try {
-    // Use the updateBooking API directly
-    const updateRes = await bookingApi.updateBooking({
-      bookingId: formData.bookingId,
-      date: formData.date,
-      customerName: formData.customerName,
-      phone: formData.phone,
-      from: formData.from,
-      to: formData.to,
-      vehicle: formData.vehicle,
-      vehicleAverage: formData.vehicleAverage,
-      bookingAmount: formData.bookingAmount,
-      advance: formData.advance,
-      driverName: formData.driverName,
-      driverPhone: formData.driverPhone,
-      startKM: formData.startKM,
-      endKM: formData.endKM,
-      totalKM: formData.totalKM,
-      fuelRate: formData.fuelRate,
-      liters: formData.liters,
-      fuelCost: formData.fuelCost,
-      toll: formData.toll,
-      driverPayment: formData.driverPayment,
-      otherExpenses: formData.otherExpenses,
-      totalExpenses: formData.totalExpenses,
-      outstanding: formData.outstanding,
-      netProfit: formData.netProfit,
-      notes: formData.notes,
-      status: formData.status
-    });
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setSaving(true);
+    setError('');
+    setSuccess('');
     
-    console.log('Update response:', updateRes);
-    
-    if (updateRes.success) {
-      setSuccess('✅ Booking updated successfully!');
+    try {
+      // Use the updateBooking API directly
+      const updateRes = await bookingApi.updateBooking({
+        bookingId: formData.bookingId,
+        date: formData.date,
+        customerName: formData.customerName,
+        phone: formData.phone,
+        from: formData.from,
+        to: formData.to,
+        vehicle: formData.vehicle,
+        vehicleAverage: formData.vehicleAverage,
+        bookingAmount: formData.bookingAmount,
+        advance: formData.advance,
+        driverName: formData.driverName,
+        driverPhone: formData.driverPhone,
+        startKM: formData.startKM,
+        endKM: formData.endKM,
+        totalKM: formData.totalKM,
+        fuelRate: formData.fuelRate,
+        liters: formData.liters,
+        fuelCost: formData.fuelCost,
+        toll: formData.toll,
+        driverPayment: formData.driverPayment,
+        otherExpenses: formData.otherExpenses,
+        totalExpenses: formData.totalExpenses,
+        outstanding: formData.outstanding,
+        netProfit: formData.netProfit,
+        notes: formData.notes,
+        status: formData.status
+      });
       
-      // Reload data to show updated values
-      setTimeout(() => {
-        loadBookingData();
-      }, 1000);
+      console.log('Update response:', updateRes);
       
-      // Redirect to dashboard after 2 seconds
-      setTimeout(() => {
-        router.push('/');
-      }, 2000);
+      if (updateRes.success) {
+        setSuccess('✅ Booking updated successfully!');
+        
+        // Reload data to show updated values
+        setTimeout(() => {
+          loadAllData();
+        }, 1000);
+        
+        // Redirect to dashboard after 2 seconds
+        setTimeout(() => {
+          router.push('/');
+        }, 2000);
+        
+      } else {
+        setError('⚠️ Failed to update booking: ' + (updateRes.error || 'Unknown error'));
+      }
       
-    } else {
-      setError('⚠️ Failed to update booking: ' + (updateRes.error || 'Unknown error'));
+    } catch (error) {
+      console.error('Error saving booking:', error);
+      setError('⚠️ Failed to update booking. Please try again.');
+    } finally {
+      setSaving(false);
     }
-    
-  } catch (error) {
-    console.error('Error saving booking:', error);
-    setError('⚠️ Failed to update booking. Please try again.');
-  } finally {
-    setSaving(false);
-  }
-};
-
+  };
 
   const handleQuickCalculate = async () => {
     setSaving(true);
@@ -291,7 +325,7 @@ export default function EditBookingPage() {
       if (res.success) {
         setSuccess('✅ Profit calculated successfully!');
         // Reload data
-        await loadBookingData();
+        await loadAllData();
       } else {
         setError('⚠️ Failed to calculate profit');
       }
@@ -315,6 +349,15 @@ export default function EditBookingPage() {
       }
     }
   };
+
+  // Filter available vehicles and drivers
+  const availableVehicles = vehicles.filter(v => 
+    v.status === 'Available' || v.vehicleId === formData.vehicle
+  );
+  
+  const availableDrivers = drivers.filter(d => 
+    d.status === 'Available' || d.name === formData.driverName
+  );
 
   if (loading) {
     return (
@@ -466,18 +509,52 @@ export default function EditBookingPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Vehicle Type
                 </label>
-                <select
-                  name="vehicle"
-                  value={formData.vehicle}
-                  onChange={handleChange}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                >
-                  {vehicleOptions.map(option => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
+                {loadingDropdowns ? (
+                  <div className="w-full px-4 py-2.5 border border-gray-300 rounded-lg bg-gray-100 animate-pulse">
+                    Loading vehicles...
+                  </div>
+                ) : availableVehicles.length > 0 ? (
+                  <select
+                    name="vehicle"
+                    value={formData.vehicle}
+                    onChange={handleChange}
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Select Vehicle</option>
+                    {availableVehicles.map(vehicle => (
+                      <option 
+                        key={vehicle.vehicleId || vehicle.number} 
+                        value={vehicle.type || vehicle.number}
+                      >
+                        {vehicle.type} - {vehicle.number} 
+                        {vehicle.model ? ` (${vehicle.model})` : ''}
+                        {vehicle.average ? ` [Avg: ${vehicle.average} km/L]` : ''}
+                      </option>
+                    ))}
+                    <option value="Other">Other (Manual Entry)</option>
+                  </select>
+                ) : (
+                  <>
+                    <select
+                      name="vehicle"
+                      value={formData.vehicle}
+                      onChange={handleChange}
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="Innova">Toyota Innova</option>
+                      <option value="Swift Dzire">Maruti Swift Dzire</option>
+                      <option value="Tempo Traveller">Tempo Traveller</option>
+                      <option value="XUV700">Mahindra XUV700</option>
+                      <option value="Scorpio">Mahindra Scorpio</option>
+                      <option value="Ertiga">Maruti Ertiga</option>
+                      <option value="Crysta">Toyota Innova Crysta</option>
+                      <option value="Other">Other</option>
+                    </select>
+                    <p className="text-xs text-gray-500 mt-1">
+                      No vehicles in database. Using default options.
+                    </p>
+                  </>
+                )}
               </div>
               
               <div>
@@ -533,13 +610,44 @@ export default function EditBookingPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Driver Name
                 </label>
-                <input
-                  type="text"
-                  name="driverName"
-                  value={formData.driverName}
-                  onChange={handleChange}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                />
+                {loadingDropdowns ? (
+                  <div className="w-full px-4 py-2.5 border border-gray-300 rounded-lg bg-gray-100 animate-pulse">
+                    Loading drivers...
+                  </div>
+                ) : availableDrivers.length > 0 ? (
+                  <select
+                    name="driverName"
+                    value={formData.driverName}
+                    onChange={handleChange}
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  >
+                    <option value="">Select Driver</option>
+                    {availableDrivers.map(driver => (
+                      <option 
+                        key={driver.driverId} 
+                        value={driver.name}
+                      >
+                        {driver.name} - {driver.phone}
+                        {driver.experience ? ` (${driver.experience})` : ''}
+                      </option>
+                    ))}
+                    <option value="Other">Other (Manual Entry)</option>
+                  </select>
+                ) : (
+                  <>
+                    <input
+                      type="text"
+                      name="driverName"
+                      value={formData.driverName}
+                      onChange={handleChange}
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      placeholder="Enter driver name"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">
+                      No drivers in database. Manual entry required.
+                    </p>
+                  </>
+                )}
               </div>
               
               <div>
@@ -552,6 +660,7 @@ export default function EditBookingPage() {
                   value={formData.driverPhone}
                   onChange={handleChange}
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  placeholder="Driver phone number"
                 />
               </div>
               
@@ -828,6 +937,25 @@ export default function EditBookingPage() {
             </div>
           </div>
         </form>
+        
+        {/* Quick Links */}
+        <div className="mt-8 p-4 bg-gray-100 rounded-lg text-sm">
+          <p className="font-medium text-gray-700 mb-2">Need to manage drivers or vehicles?</p>
+          <div className="flex space-x-4">
+            <button
+              onClick={() => router.push('/management/drivers')}
+              className="text-blue-600 hover:text-blue-800 hover:underline"
+            >
+              Manage Drivers
+            </button>
+            <button
+              onClick={() => router.push('/management/vehicles')}
+              className="text-blue-600 hover:text-blue-800 hover:underline"
+            >
+              Manage Vehicles
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );
