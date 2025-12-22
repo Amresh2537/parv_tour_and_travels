@@ -333,32 +333,92 @@ export default function BookingTripPage() {
           </motion.div>
 
           {/* Tab Navigation */}
-          <div className="mb-8">
-            <div className="flex space-x-4 border-b border-gray-200">
-              <button
-                onClick={() => setActiveTab('receipt')}
-                className={`px-6 py-3 text-sm font-medium border-b-2 transition-all ${activeTab === 'receipt' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
-              >
-                <span className="flex items-center">
-                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                  </svg>
-                  Customer Receipt
-                </span>
-              </button>
-              <button
-                onClick={() => setActiveTab('profit')}
-                className={`px-6 py-3 text-sm font-medium border-b-2 transition-all ${activeTab === 'profit' ? 'border-emerald-600 text-emerald-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
-              >
-                <span className="flex items-center">
-                  <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                  </svg>
-                  Profit & Loss Calculator
-                </span>
-              </button>
+       {/* Enhanced Tab Navigation - Glass Morphism */}
+<div className="mb-8">
+  <div className="relative">
+    {/* Background Glow Effect */}
+    <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 via-transparent to-emerald-500/10 blur-xl opacity-50"></div>
+    
+    {/* Main Tab Container */}
+    <div className="relative backdrop-blur-lg bg-white/80 rounded-2xl p-2 shadow-lg border border-white/20">
+      <div className="flex">
+        {/* Customer Receipt Tab */}
+        <button
+          onClick={() => setActiveTab('receipt')}
+          className={`flex-1 flex items-center justify-center px-6 py-4 rounded-xl transition-all duration-300 ${
+            activeTab === 'receipt' 
+              ? 'bg-gradient-to-r from-blue-500 to-blue-600 text-white shadow-lg transform -translate-y-1' 
+              : 'text-gray-600 hover:text-blue-600 hover:bg-white/50'
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <div className={`p-2 rounded-lg ${
+              activeTab === 'receipt' 
+                ? 'bg-white/20' 
+                : 'bg-blue-50'
+            }`}>
+              <svg className={`w-5 h-5 ${activeTab === 'receipt' ? 'text-white' : 'text-blue-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+            </div>
+            <div className="text-left">
+              <div className="font-semibold">Customer Receipt</div>
+              <div className={`text-xs ${activeTab === 'receipt' ? 'text-blue-100' : 'text-gray-500'}`}>
+                Print & share receipt
+              </div>
             </div>
           </div>
+          {activeTab === 'receipt' && (
+            <div className="ml-3 w-2 h-2 bg-white rounded-full animate-pulse"></div>
+          )}
+        </button>
+
+        {/* Divider */}
+        <div className="w-px bg-gray-200 my-2 mx-1"></div>
+
+        {/* Profit & Loss Calculator Tab */}
+        <button
+          onClick={() => setActiveTab('profit')}
+          className={`flex-1 flex items-center justify-center px-6 py-4 rounded-xl transition-all duration-300 ${
+            activeTab === 'profit' 
+              ? 'bg-gradient-to-r from-emerald-500 to-green-600 text-white shadow-lg transform -translate-y-1' 
+              : 'text-gray-600 hover:text-emerald-600 hover:bg-white/50'
+          }`}
+        >
+          <div className="flex items-center gap-3">
+            <div className={`p-2 rounded-lg ${
+              activeTab === 'profit' 
+                ? 'bg-white/20' 
+                : 'bg-emerald-50'
+            }`}>
+              <svg className={`w-5 h-5 ${activeTab === 'profit' ? 'text-white' : 'text-emerald-500'}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+              </svg>
+            </div>
+            <div className="text-left">
+              <div className="font-semibold">Profit Calculator</div>
+              <div className={`text-xs ${activeTab === 'profit' ? 'text-emerald-100' : 'text-gray-500'}`}>
+                Internal analysis
+              </div>
+            </div>
+          </div>
+          {activeTab === 'profit' && (
+            <div className="ml-3 w-2 h-2 bg-white rounded-full animate-pulse"></div>
+          )}
+        </button>
+      </div>
+    </div>
+    
+    {/* Active Tab Indicator */}
+    <div className="absolute -bottom-2 left-0 right-0 flex justify-center">
+      <div className={`w-24 h-1 rounded-full transition-all duration-300 ${
+        activeTab === 'receipt' 
+          ? 'bg-gradient-to-r from-blue-500 to-blue-600' 
+          : 'bg-gradient-to-r from-emerald-500 to-green-600'
+      }`}></div>
+    </div>
+  </div>
+</div>
 
           {/* Customer Receipt - SIMPLE BLOCK VIEW */}
           {activeTab === 'receipt' && (
