@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { bookingApi, formatCurrency, formatDate } from '@/lib/api';
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
 
 export default function EditBookingPage() {
   const router = useRouter();
@@ -15,7 +17,7 @@ export default function EditBookingPage() {
   const [success, setSuccess] = useState('');
   
   // Dynamic dropdown data
-  const [vehicles, setVehicles] = useState([]);
+  const [availableVehicles, setAvailableVehicles] = useState([]);
   const [drivers, setDrivers] = useState([]);
   const [loadingDropdowns, setLoadingDropdowns] = useState(true);
   
@@ -23,16 +25,18 @@ export default function EditBookingPage() {
   const [formData, setFormData] = useState({
     // Booking Details
     bookingId: '',
-    date: new Date().toISOString().split('T')[0],
+    date: new Date(), // Changed to Date object for DatePicker
     customerName: '',
     phone: '',
     from: '',
     to: '',
-    vehicle: 'Innova',
+    vehicle: '',
     vehicleAverage: '12',
     bookingAmount: '',
     advance: '',
     status: 'pending',
+    passengers: '', // Added passengers field
+    tripType: 'one-way', // Added trip type
     
     // Driver Details
     driverName: '',
@@ -76,6 +80,15 @@ export default function EditBookingPage() {
     { value: 'cancelled', label: '❌ Cancelled' }
   ];
 
+  // Trip type options
+  const tripTypeOptions = [
+    { value: 'one-way', label: 'One Way' },
+    { value: 'round-trip', label: 'Round Trip' },
+    { value: 'multi-city', label: 'Multi City' },
+    { value: 'hourly', label: 'Hourly Basis' },
+    { value: 'daily', label: 'Daily Package' }
+  ];
+
   useEffect(() => {
     if (bookingId) {
       loadAllData();
@@ -88,30 +101,51 @@ export default function EditBookingPage() {
     setError('');
     
     try {
-      // Load dropdown data in parallel
+      // Load dropdown data and booking in parallel
       const [bookingRes, driversRes, vehiclesRes] = await Promise.all([
         bookingApi.getById(bookingId),
         bookingApi.getDrivers(),
-        bookingApi.getVehicles()
+        bookingApi.getAvailableVehicles() // Using the new function for dynamic vehicles
       ]);
       
       // Load booking details
       if (bookingRes.success && bookingRes.data) {
         const booking = bookingRes.data;
         
+        // Parse booking date (handle both string and date formats)
+        let bookingDate = new Date();
+        if (booking.date) {
+          try {
+            // Try to parse Indian date format (DD/MM/YYYY)
+            if (typeof booking.date === 'string' && booking.date.includes('/')) {
+              const [day, month, year] = booking.date.split('/');
+              bookingDate = new Date(year, month - 1, day);
+            } else {
+              bookingDate = new Date(booking.date);
+            }
+            if (isNaN(bookingDate.getTime())) {
+              bookingDate = new Date();
+            }
+          } catch (e) {
+            bookingDate = new Date();
+          }
+        }
+        
         setFormData({
           // Booking Details
           bookingId: booking.bookingId || bookingId,
-          date: booking.date || new Date().toISOString().split('T')[0],
+          date: bookingDate,
           customerName: booking.customerName || '',
           phone: booking.phone || '',
           from: booking.from || '',
           to: booking.to || '',
-          vehicle: booking.vehicle || 'Innova',
+          vehicle: booking.vehicle || '',
           vehicleAverage: booking.vehicleAverage || '12',
           bookingAmount: booking.bookingAmount || '',
           advance: booking.advance || '',
           status: booking.status || 'pending',
+          passengers: booking.passengers || '',
+          tripType: booking.tripType || 'one-way',
           
           // Driver Details
           driverName: booking.driverName || '',
@@ -155,11 +189,23 @@ export default function EditBookingPage() {
         console.warn('Could not load drivers from database');
       }
       
-      // Load vehicles data
+      // Load dynamic vehicles data
       if (vehiclesRes.success && vehiclesRes.data) {
-        setVehicles(vehiclesRes.data);
+        setAvailableVehicles(vehiclesRes.data);
       } else {
         console.warn('Could not load vehicles from database');
+        // Fallback to default vehicles
+        setAvailableVehicles([
+          { id: 'V001', name: 'Innova', type: 'SUV', capacity: 7, average: 12 },
+          { id: 'V002', name: 'Swift', type: 'Sedan', capacity: 4, average: 18 },
+          { id: 'V003', name: 'Ertiga', type: 'MPV', capacity: 7, average: 15 },
+          { id: 'V004', name: 'Scorpio', type: 'SUV', capacity: 7, average: 10 },
+          { id: 'V005', name: 'XUV700', type: 'SUV', capacity: 7, average: 11 },
+          { id: 'V006', name: 'Fortuner', type: 'SUV', capacity: 7, average: 9 },
+          { id: 'V007', name: 'Crysta', type: 'SUV', capacity: 7, average: 10 },
+          { id: 'V008', name: 'Tempo', type: 'Van', capacity: 12, average: 8 },
+          { id: 'V009', name: 'Bus', type: 'Bus', capacity: 40, average: 4 }
+        ]);
       }
       
     } catch (error) {
@@ -172,28 +218,27 @@ export default function EditBookingPage() {
   };
 
   const handleChange = (e) => {
-    const { name, value, type } = e.target;
+    const { name, value } = e.target;
     
     setFormData(prev => {
       const updated = { ...prev, [name]: value };
       
-      // If vehicle selection changes, update vehicle average
+      // If vehicle selection changes, update vehicle average and capacity info
       if (name === 'vehicle') {
-        const selectedVehicle = vehicles.find(v => 
-          v.type === value || v.vehicleId === value || v.number === value
+        const selectedVehicle = availableVehicles.find(v => 
+          v.name === value || v.type === value
         );
-        if (selectedVehicle && selectedVehicle.average) {
-          updated.vehicleAverage = selectedVehicle.average.toString();
+        if (selectedVehicle) {
+          updated.vehicleAverage = selectedVehicle.average?.toString() || '12';
         }
       }
       
       // If driver selection changes, update driver details
       if (name === 'driverName') {
         const selectedDriver = drivers.find(d => 
-          d.name === value || d.driverId === value
+          d.name === value
         );
         if (selectedDriver) {
-          updated.driverName = selectedDriver.name;
           updated.driverPhone = selectedDriver.phone || '';
         }
       }
@@ -254,6 +299,18 @@ export default function EditBookingPage() {
     });
   };
 
+  const handleDateChange = (date) => {
+    setFormData(prev => ({
+      ...prev,
+      date: date
+    }));
+  };
+
+  const getVehicleCapacity = (vehicleName) => {
+    const vehicle = availableVehicles.find(v => v.name === vehicleName);
+    return vehicle ? vehicle.capacity : 4;
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSaving(true);
@@ -261,10 +318,16 @@ export default function EditBookingPage() {
     setSuccess('');
     
     try {
+      // Format date for API (ISO string)
+      const bookingDateStr = formData.date.toISOString();
+      // Format for display (DD/MM/YYYY)
+      const displayDate = formData.date.toLocaleDateString('en-IN');
+      
       // Use the updateBooking API directly
       const updateRes = await bookingApi.updateBooking({
         bookingId: formData.bookingId,
-        date: formData.date,
+        date: displayDate, // Send display format
+        bookingDate: bookingDateStr, // Send ISO format
         customerName: formData.customerName,
         phone: formData.phone,
         from: formData.from,
@@ -273,6 +336,8 @@ export default function EditBookingPage() {
         vehicleAverage: formData.vehicleAverage,
         bookingAmount: formData.bookingAmount,
         advance: formData.advance,
+        passengers: formData.passengers,
+        tripType: formData.tripType,
         driverName: formData.driverName,
         driverPhone: formData.driverPhone,
         startKM: formData.startKM,
@@ -350,11 +415,7 @@ export default function EditBookingPage() {
     }
   };
 
-  // Filter available vehicles and drivers
-  const availableVehicles = vehicles.filter(v => 
-    v.status === 'Available' || v.vehicleId === formData.vehicle
-  );
-  
+  // Filter available drivers
   const availableDrivers = drivers.filter(d => 
     d.status === 'Available' || d.name === formData.driverName
   );
@@ -372,7 +433,7 @@ export default function EditBookingPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-8">
-      <div className="max-w-4xl mx-auto">
+      <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-6">
@@ -426,15 +487,20 @@ export default function EditBookingPage() {
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Booking Date
+                  Booking Date *
                 </label>
-                <input
-                  type="date"
-                  name="date"
-                  value={formData.date}
-                  onChange={handleChange}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                />
+                <div className="relative">
+                  <DatePicker
+                    selected={formData.date}
+                    onChange={handleDateChange}
+                    dateFormat="dd/MM/yyyy"
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    placeholderText="Select booking date"
+                  />
+                  <div className="absolute right-3 top-2.5 text-gray-400">
+                    📅
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -467,6 +533,7 @@ export default function EditBookingPage() {
                   value={formData.phone}
                   onChange={handleChange}
                   required
+                  pattern="[0-9]{10}"
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 />
               </div>
@@ -501,59 +568,75 @@ export default function EditBookingPage() {
             </div>
           </div>
           
-          {/* Vehicle & Amount */}
+          {/* Travel Details */}
           <div className="mb-8">
-            <h3 className="text-xl font-semibold text-gray-800 mb-4">🚗 Vehicle & Payment</h3>
+            <h3 className="text-xl font-semibold text-gray-800 mb-4">🚗 Travel Details</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Dynamic Vehicle Selection */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Vehicle Type
+                  Vehicle *
                 </label>
                 {loadingDropdowns ? (
-                  <div className="w-full px-4 py-2.5 border border-gray-300 rounded-lg bg-gray-100 animate-pulse">
-                    Loading vehicles...
+                  <div className="w-full px-4 py-2.5 border border-gray-300 rounded-lg bg-gray-100">
+                    <div className="flex items-center">
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+                      <span className="text-gray-500">Loading vehicles...</span>
+                    </div>
                   </div>
                 ) : availableVehicles.length > 0 ? (
-                  <select
-                    name="vehicle"
-                    value={formData.vehicle}
-                    onChange={handleChange}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">Select Vehicle</option>
-                    {availableVehicles.map(vehicle => (
-                      <option 
-                        key={vehicle.vehicleId || vehicle.number} 
-                        value={vehicle.type || vehicle.number}
-                      >
-                        {vehicle.type} - {vehicle.number} 
-                        {vehicle.model ? ` (${vehicle.model})` : ''}
-                        {vehicle.average ? ` [Avg: ${vehicle.average} km/L]` : ''}
-                      </option>
-                    ))}
-                    <option value="Other">Other (Manual Entry)</option>
-                  </select>
-                ) : (
-                  <>
+                  <div>
                     <select
                       name="vehicle"
                       value={formData.vehicle}
                       onChange={handleChange}
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      required
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 appearance-none"
                     >
-                      <option value="Innova">Toyota Innova</option>
-                      <option value="Swift Dzire">Maruti Swift Dzire</option>
-                      <option value="Tempo Traveller">Tempo Traveller</option>
-                      <option value="XUV700">Mahindra XUV700</option>
-                      <option value="Scorpio">Mahindra Scorpio</option>
-                      <option value="Ertiga">Maruti Ertiga</option>
-                      <option value="Crysta">Toyota Innova Crysta</option>
-                      <option value="Other">Other</option>
+                      <option value="">Select Vehicle</option>
+                      {availableVehicles.map(vehicle => (
+                        <option 
+                          key={vehicle.id || vehicle.name} 
+                          value={vehicle.name}
+                          className="py-2"
+                        >
+                          {vehicle.name} 
+                          {vehicle.type && ` (${vehicle.type})`}
+                          {vehicle.capacity && ` - ${vehicle.capacity} seats`}
+                        </option>
+                      ))}
                     </select>
-                    <p className="text-xs text-gray-500 mt-1">
-                      No vehicles in database. Using default options.
-                    </p>
-                  </>
+                    {formData.vehicle && (
+                      <div className="mt-2 text-xs text-gray-600">
+                        {(() => {
+                          const vehicle = availableVehicles.find(v => v.name === formData.vehicle);
+                          if (vehicle) {
+                            return (
+                              <>
+                                <span className="inline-block px-2 py-1 bg-blue-100 text-blue-800 rounded mr-2">
+                                  {vehicle.capacity || 4} seats
+                                </span>
+                                <span className="inline-block px-2 py-1 bg-purple-100 text-purple-800 rounded">
+                                  Avg: {vehicle.average || 12} km/L
+                                </span>
+                              </>
+                            );
+                          }
+                          return null;
+                        })()}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <input
+                    type="text"
+                    name="vehicle"
+                    value={formData.vehicle}
+                    onChange={handleChange}
+                    required
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    placeholder="Enter vehicle name"
+                  />
                 )}
               </div>
               
@@ -574,13 +657,57 @@ export default function EditBookingPage() {
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Booking Amount (₹)
+                  Passengers
+                </label>
+                <input
+                  type="number"
+                  name="passengers"
+                  value={formData.passengers}
+                  onChange={handleChange}
+                  min="1"
+                  max={getVehicleCapacity(formData.vehicle)}
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  placeholder={`Max: ${getVehicleCapacity(formData.vehicle)}`}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Vehicle capacity: {getVehicleCapacity(formData.vehicle)} seats
+                </p>
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Trip Type
+                </label>
+                <select
+                  name="tripType"
+                  value={formData.tripType}
+                  onChange={handleChange}
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                >
+                  {tripTypeOptions.map(option => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          </div>
+          
+          {/* Payment Details */}
+          <div className="mb-8">
+            <h3 className="text-xl font-semibold text-gray-800 mb-4">💰 Payment Details</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Booking Amount (₹) *
                 </label>
                 <input
                   type="number"
                   name="bookingAmount"
                   value={formData.bookingAmount}
                   onChange={handleChange}
+                  required
                   min="0"
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 />
@@ -598,6 +725,15 @@ export default function EditBookingPage() {
                   min="0"
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 />
+              </div>
+              
+              <div className="md:col-span-2">
+                <div className="p-4 bg-gray-50 rounded-lg">
+                  <p className="text-sm text-gray-600">Balance Amount:</p>
+                  <p className={`text-2xl font-bold ${(parseFloat(formData.bookingAmount) - parseFloat(formData.advance)) > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                    ₹{((parseFloat(formData.bookingAmount) || 0) - (parseFloat(formData.advance) || 0)).toFixed(2)}
+                  </p>
+                </div>
               </div>
             </div>
           </div>
@@ -634,19 +770,14 @@ export default function EditBookingPage() {
                     <option value="Other">Other (Manual Entry)</option>
                   </select>
                 ) : (
-                  <>
-                    <input
-                      type="text"
-                      name="driverName"
-                      value={formData.driverName}
-                      onChange={handleChange}
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                      placeholder="Enter driver name"
-                    />
-                    <p className="text-xs text-gray-500 mt-1">
-                      No drivers in database. Manual entry required.
-                    </p>
-                  </>
+                  <input
+                    type="text"
+                    name="driverName"
+                    value={formData.driverName}
+                    onChange={handleChange}
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    placeholder="Enter driver name"
+                  />
                 )}
               </div>
               
@@ -884,6 +1015,7 @@ export default function EditBookingPage() {
               <p>Created: {formatDate(formData.createdAt)}</p>
               <p>Last Updated: {formatDate(formData.updatedAt)}</p>
               <p>Status Last Changed: {formatDate(formData.statusChangeDate)} by {formData.statusChangedBy || 'system'}</p>
+              <p>Booking Time: {formData.date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true })}</p>
             </div>
           )}
           
