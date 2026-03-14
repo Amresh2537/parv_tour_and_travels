@@ -49,12 +49,19 @@ export default function Navbar() {
     };
   }, []);
 
+  useEffect(() => {
+    setShowStatusMenu(false);
+    setShowProfileMenu(false);
+    setShowMobileMenu(false);
+  }, [pathname]);
+
   const navItems = [
     { name: 'Dashboard', href: '/' },
     { name: 'Bookings', href: '/booking/entry' },
     { name: 'Vehicles', href: '/vehicles' },
     { name: 'Drivers', href: '/drivers' },
     { name: 'Reports', href: '/reports' },
+    { name: 'How It Works', href: '/how-it-works' },
   ];
 
   const statusOptions = [
@@ -152,16 +159,16 @@ export default function Navbar() {
 
   return (
     <nav className="bg-[#1a2332] border-b border-[#2d3748] sticky top-0 z-50" style={{ fontFamily: 'Inter, -apple-system, system-ui, sans-serif' }}>
-      <div className="max-w-[1400px] mx-auto px-6">
-        <div className="flex justify-between items-center h-14">
+      <div className="max-w-[1400px] mx-auto px-3 sm:px-4 md:px-6">
+        <div className="flex justify-between items-center h-14 md:h-14">
           {/* Logo Section */}
-          <div className="flex items-center">
+          <div className="flex items-center min-w-0">
             <Link href="/" className="flex items-center space-x-2.5 group">
-              <div className="w-8 h-8 bg-[#2d5bff] rounded flex items-center justify-center">
+              <div className="w-8 h-8 bg-[#2d5bff] rounded flex items-center justify-center shrink-0">
                 <span className="text-white font-semibold text-sm">P</span>
               </div>
-              <div className="hidden md:block">
-                <span className="text-sm font-semibold text-white tracking-tight">PARV Tour & Travels</span>
+              <div className="block md:block min-w-0">
+                <span className="text-[13px] sm:text-sm font-semibold text-white tracking-tight truncate block">PARV Tour & Travels</span>
               </div>
             </Link>
           </div>
@@ -187,7 +194,8 @@ export default function Navbar() {
           <div className="md:hidden">
             <button
               onClick={() => setShowMobileMenu(!showMobileMenu)}
-              className="p-2 text-[#a0aec0] hover:text-white"
+              aria-label={showMobileMenu ? 'Close menu' : 'Open menu'}
+              className="p-2.5 text-[#a0aec0] hover:text-white hover:bg-[#2d3748] rounded-md"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" 
@@ -361,13 +369,13 @@ export default function Navbar() {
 
         {/* Mobile Menu */}
         {showMobileMenu && (
-          <div className="md:hidden border-t border-[#2d3748]" ref={mobileMenuRef}>
-            <div className="px-2 pt-2 pb-3 space-y-1">
+          <div className="md:hidden border-t border-[#2d3748] bg-[#161f2d]" ref={mobileMenuRef}>
+            <div className="px-3 pt-3 pb-3 space-y-1.5">
               {navItems.map((item) => (
                 <Link
                   key={item.name}
                   href={item.href}
-                  className={`block px-3 py-2 text-[13px] font-medium rounded ${
+                  className={`block px-3 py-2.5 text-[13px] font-medium rounded ${
                     pathname === item.href
                       ? 'bg-[#2d5bff] text-white'
                       : 'text-[#a0aec0] hover:text-white hover:bg-[#2d3748]'
@@ -377,6 +385,53 @@ export default function Navbar() {
                   {item.name}
                 </Link>
               ))}
+            </div>
+
+            <div className="px-4 py-3 border-t border-[#2d3748]">
+              <label className="block text-[11px] font-medium text-[#a0aec0] mb-1.5">Filter Bookings</label>
+              <select
+                value={statusFilter}
+                onChange={(e) => handleStatusFilter(e.target.value)}
+                className="w-full text-[13px] border border-[#3e4b61] bg-[#202a3a] text-white rounded px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-[#2d5bff]"
+              >
+                {statusOptions.map(option => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="px-4 py-3 border-t border-[#2d3748]">
+              <p className="text-[11px] font-medium text-[#a0aec0] mb-2">Quick Actions</p>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => handleQuickActions('new_booking')}
+                  className="text-xs px-3 py-2.5 bg-[#2d5bff] text-white hover:bg-[#2451e6] rounded"
+                >
+                  New Booking
+                </button>
+                <button
+                  onClick={handleStatusEdit}
+                  disabled={isLoading}
+                  className="text-xs px-3 py-2.5 bg-[#2d3748] text-[#e2e8f0] hover:bg-[#374151] rounded disabled:opacity-50"
+                >
+                  Edit Status
+                </button>
+                <button
+                  onClick={handleCancelBooking}
+                  disabled={isLoading}
+                  className="text-xs px-3 py-2.5 bg-[#2d3748] text-[#fca5a5] hover:bg-[#374151] rounded disabled:opacity-50"
+                >
+                  Cancel Booking
+                </button>
+                <button
+                  onClick={() => handleQuickActions('today_report')}
+                  className="text-xs px-3 py-2.5 bg-[#2d3748] text-[#e2e8f0] hover:bg-[#374151] rounded"
+                >
+                  Today Report
+                </button>
+              </div>
             </div>
             
             <div className="px-4 py-3 border-t border-[#2d3748]">
@@ -388,6 +443,27 @@ export default function Navbar() {
                   <p className="text-sm font-medium text-white">Admin User</p>
                   <p className="text-xs text-[#a0aec0]">Super Admin</p>
                 </div>
+              </div>
+
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                <Link
+                  href="/profile"
+                  className="text-center text-[11px] px-2 py-2 bg-[#2d3748] text-[#e2e8f0] rounded hover:bg-[#374151]"
+                >
+                  Profile
+                </Link>
+                <Link
+                  href="/settings"
+                  className="text-center text-[11px] px-2 py-2 bg-[#2d3748] text-[#e2e8f0] rounded hover:bg-[#374151]"
+                >
+                  Settings
+                </Link>
+                <Link
+                  href="/logs"
+                  className="text-center text-[11px] px-2 py-2 bg-[#2d3748] text-[#e2e8f0] rounded hover:bg-[#374151]"
+                >
+                  Logs
+                </Link>
               </div>
             </div>
           </div>

@@ -137,7 +137,7 @@ export default function DriverPage() {
     } 
     else {
       setFormData(prev => ({
-        const result = await bookingApi.addDriverRecord(formData);
+        ...prev,
         [name]: value
       }));
     }
