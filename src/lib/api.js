@@ -1,11 +1,11 @@
-// lib/api.js - CORRECT VERSION
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxqMMyM9yuq5UppzD8oBcXjqDR0IUYdaPWnTJ_hmVEAkFn1M0YQjUlb1qmNKpLeTDU0/exec';
+// lib/api.js - MongoDB-backed API wrapper
+const API_BASE_URL = '/api/bookings';
 
 export async function apiRequest(data = null, method = 'GET') {
   try {
     console.log('📡 API Request:', { method, data });
     
-    let url = APPS_SCRIPT_URL;
+    let url = API_BASE_URL;
     
     if (method === 'GET' && data) {
       const params = new URLSearchParams();
@@ -21,31 +21,38 @@ export async function apiRequest(data = null, method = 'GET') {
       method: method,
     };
     
-    if (method === 'POST' && data) {
-      const formData = new URLSearchParams();
-      Object.keys(data).forEach(key => {
-        if (data[key] !== undefined && data[key] !== null) {
-          formData.append(key, data[key]);
-        }
-      });
-      
-      options.body = formData.toString();
+    if (method !== 'GET' && data) {
+      options.body = JSON.stringify(data);
       options.headers = {
-        'Content-Type': 'application/x-www-form-urlencoded',
+        'Content-Type': 'application/json',
       };
     }
     
     console.log('Fetching URL:', url);
     const response = await fetch(url, options);
-    const text = await response.text();
-    console.log('API Response:', text);
-    
-    try {
-      return JSON.parse(text);
-    } catch (e) {
-      console.error('JSON parse error:', e);
-      return { success: false, error: 'Invalid JSON response', raw: text };
+
+    const contentType = response.headers.get('content-type') || '';
+
+    // Prefer JSON when available
+    if (contentType.includes('application/json')) {
+      const json = await response.json();
+      console.log('API JSON Response:', json);
+      return json;
     }
+
+    // Fallback: read as text (likely an HTML error page)
+    const text = await response.text();
+    console.error('Non‑JSON API response:', {
+      status: response.status,
+      statusText: response.statusText,
+      snippet: text.slice(0, 200)
+    });
+    return {
+      success: false,
+      error: 'Invalid JSON response',
+      status: response.status,
+      raw: text
+    };
     
   } catch (error) {
     console.error('API Error:', error);
@@ -75,17 +82,17 @@ export const bookingApi = {
   
   // Driver Management
   getDrivers: () => apiRequest({ action: 'getDrivers' }, 'GET'),
-  addDriver: (data) => apiRequest({ action: 'addDriver', ...data }, 'POST'),
+  addDriverRecord: (data) => apiRequest({ action: 'addDriverRecord', ...data }, 'POST'),
   updateDriver: (data) => apiRequest({ action: 'updateDriver', ...data }, 'POST'),
   deleteDriver: (driverId) => apiRequest({ action: 'deleteDriver', driverId }, 'POST'),
-   updateBooking: (data) => apiRequest({ action: 'updateBooking', ...data }, 'POST'),
+  updateBooking: (data) => apiRequest({ action: 'updateBooking', ...data }, 'POST'),
   // Vehicle Management
   getVehicles: () => apiRequest({ action: 'getVehicles' }, 'GET'),
-   getAvailableVehicles: () => apiRequest({ action: 'getAvailableVehicles' }, 'GET'),
+  getAvailableVehicles: () => apiRequest({ action: 'getAvailableVehicles' }, 'GET'),
   addVehicle: (data) => apiRequest({ action: 'addVehicle', ...data }, 'POST'),
   updateVehicle: (data) => apiRequest({ action: 'updateVehicle', ...data }, 'POST'),
   deleteVehicle: (vehicleId) => apiRequest({ action: 'deleteVehicle', vehicleId }, 'POST'),
-    assignDriverToBooking: (data) => apiRequest({ action: 'assignDriverToBooking', ...data }, 'POST'),
+  assignDriverToBooking: (data) => apiRequest({ action: 'addDriver', ...data }, 'POST'),
 };
 // Trip calculator functions
 export const tripCalculator = {

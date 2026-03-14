@@ -95,6 +95,35 @@ export default function EditBookingPage() {
     }
   }, [bookingId]);
 
+  const normalizeDriver = (driver) => ({
+    id: driver.driverId || driver.id || driver._id || '',
+    name: driver.name || driver.driverName || '',
+    phone: driver.phone || driver.driverPhone || '',
+    status: driver.status || '',
+    experience: driver.experience || ''
+  });
+
+  const normalizeVehicle = (vehicle) => {
+    const vehicleName =
+      vehicle.name ||
+      vehicle.type ||
+      vehicle.vehicleType ||
+      vehicle.model ||
+      vehicle.number ||
+      vehicle.registration ||
+      '';
+
+    return {
+      id: vehicle.vehicleId || vehicle.id || vehicle._id || '',
+      name: vehicleName,
+      type: vehicle.type || vehicle.vehicleType || vehicleName,
+      number: vehicle.number || vehicle.registration || '',
+      capacity: vehicle.capacity || '',
+      average: vehicle.average || vehicle.vehicleAverage || '',
+      status: vehicle.status || ''
+    };
+  };
+
   const loadAllData = async () => {
     setLoading(true);
     setLoadingDropdowns(true);
@@ -105,7 +134,7 @@ export default function EditBookingPage() {
       const [bookingRes, driversRes, vehiclesRes] = await Promise.all([
         bookingApi.getById(bookingId),
         bookingApi.getDrivers(),
-        bookingApi.getAvailableVehicles() // Using the new function for dynamic vehicles
+        bookingApi.getVehicles()
       ]);
       
       // Load booking details
@@ -184,14 +213,20 @@ export default function EditBookingPage() {
       
       // Load drivers data
       if (driversRes.success && driversRes.data) {
-        setDrivers(driversRes.data);
+        const normalizedDrivers = driversRes.data
+          .map(normalizeDriver)
+          .filter(d => d.name);
+        setDrivers(normalizedDrivers);
       } else {
         console.warn('Could not load drivers from database');
       }
       
       // Load dynamic vehicles data
       if (vehiclesRes.success && vehiclesRes.data) {
-        setAvailableVehicles(vehiclesRes.data);
+        const normalizedVehicles = vehiclesRes.data
+          .map(normalizeVehicle)
+          .filter(v => v.name);
+        setAvailableVehicles(normalizedVehicles);
       } else {
         console.warn('Could not load vehicles from database');
         // Fallback to default vehicles
@@ -416,9 +451,19 @@ export default function EditBookingPage() {
   };
 
   // Filter available drivers
-  const availableDrivers = drivers.filter(d => 
-    d.status === 'Available' || d.name === formData.driverName
-  );
+  const availableDrivers = drivers
+    .filter(d => d.name)
+    .sort((a, b) => {
+      if (a.name === formData.driverName) return -1;
+      if (b.name === formData.driverName) return 1;
+      if (a.status === 'Available' && b.status !== 'Available') return -1;
+      if (b.status === 'Available' && a.status !== 'Available') return 1;
+      return a.name.localeCompare(b.name);
+    });
+
+  const driverOptions = formData.driverName && !availableDrivers.some(d => d.name === formData.driverName)
+    ? [{ id: 'current-driver', name: formData.driverName, phone: formData.driverPhone || '', status: 'Assigned' }, ...availableDrivers]
+    : availableDrivers;
 
   if (loading) {
     return (
@@ -594,14 +639,15 @@ export default function EditBookingPage() {
                       className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 appearance-none"
                     >
                       <option value="">Select Vehicle</option>
-                      {availableVehicles.map(vehicle => (
+                    {availableVehicles.map((vehicle, index) => (
                         <option 
-                          key={vehicle.id || vehicle.name} 
+                        key={vehicle.id || vehicle.name || `vehicle-${index}`} 
                           value={vehicle.name}
                           className="py-2"
                         >
-                          {vehicle.name} 
-                          {vehicle.type && ` (${vehicle.type})`}
+                          {vehicle.name}
+                          {vehicle.number && ` (${vehicle.number})`}
+                          {!vehicle.number && vehicle.type && ` (${vehicle.type})`}
                           {vehicle.capacity && ` - ${vehicle.capacity} seats`}
                         </option>
                       ))}
@@ -750,34 +796,26 @@ export default function EditBookingPage() {
                   <div className="w-full px-4 py-2.5 border border-gray-300 rounded-lg bg-gray-100 animate-pulse">
                     Loading drivers...
                   </div>
-                ) : availableDrivers.length > 0 ? (
+                ) : (
                   <select
                     name="driverName"
                     value={formData.driverName}
                     onChange={handleChange}
                     className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                   >
-                    <option value="">Select Driver</option>
-                    {availableDrivers.map(driver => (
+                    <option value="">{driverOptions.length ? 'Select Driver' : 'No drivers available'}</option>
+                    {driverOptions.map(driver => (
                       <option 
-                        key={driver.driverId} 
+                        key={driver.id || driver.name} 
                         value={driver.name}
                       >
                         {driver.name} - {driver.phone}
+                        {driver.status ? ` [${driver.status}]` : ''}
                         {driver.experience ? ` (${driver.experience})` : ''}
                       </option>
                     ))}
                     <option value="Other">Other (Manual Entry)</option>
                   </select>
-                ) : (
-                  <input
-                    type="text"
-                    name="driverName"
-                    value={formData.driverName}
-                    onChange={handleChange}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                    placeholder="Enter driver name"
-                  />
                 )}
               </div>
               

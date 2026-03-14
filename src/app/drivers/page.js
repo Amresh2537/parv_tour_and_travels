@@ -65,7 +65,7 @@ export default function DriversPage() {
         }
       } else {
         // Add new driver
-        const result = await bookingApi.addDriver(formData);
+        const result = await bookingApi.addDriverRecord(formData);
         if (result.success) {
           showNotification('Driver added successfully!', 'success');
         } else {

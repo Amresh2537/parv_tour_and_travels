@@ -13,12 +13,16 @@ export default function BookingEntryPage() {
   const [loading, setLoading] = useState(false);
   const [loadingVehicles, setLoadingVehicles] = useState(true);
   const [availableVehicles, setAvailableVehicles] = useState([]);
+  const [loadingDrivers, setLoadingDrivers] = useState(true);
+  const [availableDrivers, setAvailableDrivers] = useState([]);
   const [formData, setFormData] = useState({
     customerName: '',
     phone: '',
     from: '',
     to: '',
     vehicle: '',
+    driverName: '',
+    driverPhone: '',
     bookingAmount: '',
     advance: '',
     passengers: '',
@@ -35,16 +39,30 @@ export default function BookingEntryPage() {
   const loadAvailableVehicles = async () => {
     try {
       setLoadingVehicles(true);
-      const result = await bookingApi.getAvailableVehicles();
+      setLoadingDrivers(true);
+      const [vehiclesRes, driversRes] = await Promise.all([
+        bookingApi.getAvailableVehicles(),
+        bookingApi.getDrivers()
+      ]);
       
-      if (result.success && result.data.length > 0) {
-        setAvailableVehicles(result.data);
+      if (vehiclesRes.success && Array.isArray(vehiclesRes.data) && vehiclesRes.data.length > 0) {
+        // Normalize vehicle objects coming from MongoDB so the
+        // booking form always works with a consistent shape.
+        const normalized = vehiclesRes.data.map((v, index) => ({
+          id: v.vehicleId || v.id || v._id || `vehicle-${index}`,
+          name: v.name || v.type || 'Vehicle',
+          type: v.type || v.name || '',
+          capacity: v.capacity || 4,
+          average: v.average || 12,
+        }));
+
+        setAvailableVehicles(normalized);
         
         // Set default vehicle to first available vehicle
-        if (!formData.vehicle && result.data.length > 0) {
+        if (!formData.vehicle && normalized.length > 0) {
           setFormData(prev => ({
             ...prev,
-            vehicle: result.data[0].name
+            vehicle: normalized[0].name
           }));
         }
       } else {
@@ -63,6 +81,22 @@ export default function BookingEntryPage() {
         setAvailableVehicles(defaultVehicles);
         setFormData(prev => ({ ...prev, vehicle: 'Innova' }));
       }
+
+      // Normalize and load drivers (for optional assignment on entry)
+      if (driversRes.success && Array.isArray(driversRes.data)) {
+        const drivers = driversRes.data
+          .filter(d => d.status === 'Available' || !d.status)
+          .map((d, index) => ({
+            driverId: d.driverId || d.id || d._id || `driver-${index}`,
+            name: d.name || 'Driver',
+            phone: d.phone || d.driverPhone || '',
+            experience: d.experience || '',
+            status: d.status || 'Available'
+          }));
+        setAvailableDrivers(drivers);
+      } else {
+        setAvailableDrivers([]);
+      }
     } catch (error) {
       console.error('Error loading vehicles:', error);
       // Fallback vehicles
@@ -73,11 +107,24 @@ export default function BookingEntryPage() {
       setFormData(prev => ({ ...prev, vehicle: 'Innova' }));
     } finally {
       setLoadingVehicles(false);
+      setLoadingDrivers(false);
     }
   };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+
+    // When driver changes, also auto-fill phone
+    if (name === 'driverName') {
+      const selected = availableDrivers.find(d => d.name === value);
+      setFormData(prev => ({
+        ...prev,
+        driverName: value,
+        driverPhone: selected?.phone || ''
+      }));
+      return;
+    }
+
     setFormData(prev => ({
       ...prev,
       [name]: value
@@ -107,6 +154,26 @@ export default function BookingEntryPage() {
       
       if (result.success) {
         const bookingId = result.bookingId;
+
+        // If a driver was pre-selected, attach to booking immediately
+        if (formData.driverName) {
+          const selectedDriver = availableDrivers.find(d => d.name === formData.driverName);
+          const selectedVehicle = availableVehicles.find(v => v.name === formData.vehicle);
+
+          try {
+            await bookingApi.addDriver({
+              bookingId,
+              driverId: selectedDriver?.driverId,
+              driverName: formData.driverName,
+              driverPhone: formData.driverPhone,
+              vehicleId: selectedVehicle?.id,
+              vehicleType: selectedVehicle?.type,
+              vehicleAverage: getVehicleAverage(formData.vehicle)
+            });
+          } catch (driverErr) {
+            console.error('Error attaching driver to booking:', driverErr);
+          }
+        }
         
         localStorage.setItem('currentBookingId', bookingId);
         localStorage.setItem('lastBooking', JSON.stringify({
@@ -326,9 +393,9 @@ export default function BookingEntryPage() {
                               className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white/70 backdrop-blur-sm appearance-none"
                             >
                               <option value="">Select Vehicle</option>
-                              {availableVehicles.map(vehicle => (
+                              {availableVehicles.map((vehicle, index) => (
                                 <option 
-                                  key={vehicle.id || vehicle.name} 
+                                  key={vehicle.id || vehicle.name || `${vehicle.name}-${index}`}
                                   value={vehicle.name}
                                   className="py-2"
                                 >
@@ -428,6 +495,54 @@ export default function BookingEntryPage() {
                           })}
                         </div>
                       </div>
+
+                      {/* Optional Driver Selection (interconnected with drivers collection) */}
+                      <div className="md:col-span-3">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                          Assign Driver (optional)
+                        </label>
+                        {loadingDrivers ? (
+                          <div className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-white/70">
+                            <div className="flex items-center">
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-indigo-600 mr-2"></div>
+                              <span className="text-gray-500">Loading drivers...</span>
+                            </div>
+                          </div>
+                        ) : availableDrivers.length === 0 ? (
+                          <p className="text-xs text-gray-500">
+                            No available drivers found. You can add drivers from the Drivers Management page.
+                          </p>
+                        ) : (
+                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <select
+                              name="driverName"
+                              value={formData.driverName}
+                              onChange={handleChange}
+                              className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white/70 backdrop-blur-sm"
+                            >
+                              <option value="">Select Driver (optional)</option>
+                              {availableDrivers.map((driver) => (
+                                <option key={driver.driverId} value={driver.name}>
+                                  {driver.name} {driver.phone && `- ${driver.phone}`}
+                                  {driver.experience && ` (${driver.experience})`}
+                                </option>
+                              ))}
+                            </select>
+                            <input
+                              type="tel"
+                              name="driverPhone"
+                              value={formData.driverPhone}
+                              onChange={handleChange}
+                              placeholder="Driver phone"
+                              className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white/70 backdrop-blur-sm"
+                            />
+                            <div className="text-xs text-gray-500 flex items-center">
+                              <span className="mr-2">👨‍✈️</span>
+                              If you select a driver here, they will be linked to this booking and vehicle in the system.
+                            </div>
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </motion.div>
@@ -524,6 +639,8 @@ export default function BookingEntryPage() {
                         from: '',
                         to: '',
                         vehicle: availableVehicles.length > 0 ? availableVehicles[0].name : 'Innova',
+                        driverName: '',
+                        driverPhone: '',
                         bookingAmount: '',
                         advance: '',
                         passengers: '',
