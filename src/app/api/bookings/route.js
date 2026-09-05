@@ -1,6 +1,6 @@
 export const runtime = 'nodejs';
 
-import { ObjectId } from 'mongodb';
+import { expenseTotals } from '@/lib/expenses';
 import { getDb } from '@/lib/mongodb';
 
 async function getBookingsCollection() {
@@ -205,11 +205,11 @@ async function updateBookingStatus(bookingId, status, reason) {
     { returnDocument: 'after' },
   );
 
-  if (!result.value) {
+  if (!result) {
     return createError('Booking not found');
   }
 
-  return createSuccess(result.value);
+  return createSuccess(result);
 }
 
 async function applyExpenses(bookingId, payload) {
@@ -223,7 +223,7 @@ async function applyExpenses(bookingId, payload) {
   const food = Number(payload.food) || 0;
   const parking = Number(payload.parking) || 0;
 
-  const totalExpenses = fuelCost + toll + driverPayment + otherExpenses + maintenance + food + parking;
+  const totalExpenses = expenseTotals(payload).totalExpenses;
 
   const booking = await bookingsCol.findOne({ bookingId });
   if (!booking) {
@@ -234,10 +234,13 @@ async function applyExpenses(bookingId, payload) {
   const advance = Number(booking.advance) || 0;
 
   const netProfit = bookingAmount - totalExpenses;
-  const outstanding = bookingAmount - advance - totalExpenses;
+  const outstanding = bookingAmount - advance;
 
   const update = {
     $set: {
+      vehicleAverage: payload.vehicleAverage,
+      fuelPaidBy: payload.fuelPaidBy || 'company',
+      tollPaidBy: payload.tollPaidBy || 'company',
       startKM: payload.startKM,
       endKM: payload.endKM,
       distance: payload.distance,
@@ -286,10 +289,10 @@ async function recalculateProfit(bookingId) {
   const food = Number(booking.food) || 0;
   const parking = Number(booking.parking) || 0;
 
-  const totalExpenses = fuelCost + toll + driverPayment + otherExpenses + maintenance + food + parking;
+  const totalExpenses = expenseTotals(booking).totalExpenses;
 
   const netProfit = bookingAmount - totalExpenses;
-  const outstanding = bookingAmount - advance - totalExpenses;
+  const outstanding = bookingAmount - advance;
 
   await bookingsCol.updateOne(
     { bookingId },
@@ -327,6 +330,10 @@ export async function POST(request) {
 
       const doc = {
         bookingId,
+        driverName: payload.driverName || '',
+        driverPhone: payload.driverPhone || '',
+        fuelPaidBy: payload.fuelPaidBy || 'company',
+        tollPaidBy: payload.tollPaidBy || 'company',
         customerName: payload.customerName || '',
         phone: payload.phone || '',
         from: payload.from || '',
@@ -364,8 +371,15 @@ export async function POST(request) {
         return Response.json(createError('bookingId is required'), { status: 400 });
       }
 
-      const updatePayload = { ...payload };
+      const existing = await bookingsCol.findOne({ bookingId });
+      if (!existing) return Response.json(createError('Booking not found'), { status: 404 });
+      const merged = { ...existing, ...payload };
+      const totals = expenseTotals(merged);
+      const updatePayload = { ...payload, totalExpenses: totals.totalExpenses,
+        netProfit: (Number(merged.bookingAmount) || 0) - totals.totalExpenses,
+        outstanding: (Number(merged.bookingAmount) || 0) - (Number(merged.advance) || 0) };
       delete updatePayload.bookingId;
+      delete updatePayload._id;
 
       if (updatePayload.bookingDate && typeof updatePayload.bookingDate === 'string') {
         updatePayload.bookingDate = updatePayload.bookingDate;
@@ -382,11 +396,11 @@ export async function POST(request) {
         { returnDocument: 'after' },
       );
 
-      if (!result.value) {
+      if (!result) {
         return Response.json(createError('Booking not found'), { status: 404 });
       }
 
-      return Response.json(createSuccess(result.value));
+      return Response.json(createSuccess(result));
     }
 
     if (action === 'confirm') {
@@ -503,7 +517,7 @@ export async function POST(request) {
         { upsert: false, returnDocument: 'after' },
       );
 
-      return Response.json(createSuccess(result.value));
+      return Response.json(createSuccess(result));
     }
 
     if (action === 'deleteDriver') {
@@ -538,7 +552,7 @@ export async function POST(request) {
         { upsert: true, returnDocument: 'after' },
       );
 
-      return Response.json(createSuccess(result.value));
+      return Response.json(createSuccess(result));
     }
 
     if (action === 'deleteVehicle') {

@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { bookingApi } from '@/lib/api';
-import { TravelBackground } from '@/components/TravelBackground';
 import { motion } from 'framer-motion';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
@@ -21,6 +20,8 @@ export default function BookingEntryPage() {
     from: '',
     to: '',
     vehicle: '',
+    fuelPaidBy: 'company',
+    tollPaidBy: 'company',
     driverName: '',
     driverPhone: '',
     bookingAmount: '',
@@ -120,7 +121,7 @@ export default function BookingEntryPage() {
       setFormData(prev => ({
         ...prev,
         driverName: value,
-        driverPhone: selected?.phone || ''
+        driverPhone: selected?.phone || prev.driverPhone
       }));
       return;
     }
@@ -146,14 +147,14 @@ export default function BookingEntryPage() {
       // Format date for API
       const submitData = {
         ...formData,
-        bookingDate: formData.bookingDate.toISOString(),
+        bookingDate: formData.bookingDate?.toISOString() || '',
         vehicleAverage: getVehicleAverage(formData.vehicle)
       };
 
       const result = await bookingApi.create(submitData);
       
       if (result.success) {
-        const bookingId = result.bookingId;
+        const bookingId = result.data?.bookingId || result.bookingId;
 
         // If a driver was pre-selected, attach to booking immediately
         if (formData.driverName) {
@@ -175,11 +176,12 @@ export default function BookingEntryPage() {
           }
         }
         
+        ['driverData', 'expensesData', 'calculations'].forEach(key => localStorage.removeItem(key));
         localStorage.setItem('currentBookingId', bookingId);
         localStorage.setItem('lastBooking', JSON.stringify({
-          ...formData,
+          ...submitData,
           bookingId: bookingId,
-          bookingDate: formData.bookingDate.toLocaleDateString('en-IN'),
+          bookingDate: formData.bookingDate?.toISOString() || '',
           status: 'pending'
         }));
         
@@ -230,24 +232,24 @@ export default function BookingEntryPage() {
   };
 
   return (
-    <TravelBackground variant="road">
+    <div className="booking-workspace bg-gray-50 text-gray-900">
       <div className="min-h-screen p-4 md:p-8 flex items-center justify-center">
         <div className="max-w-4xl w-full">
-          <div className="backdrop-blur-lg bg-white/90 rounded-3xl shadow-2xl overflow-hidden border border-white/20">
+          <div className="backdrop-blur-lg bg-white/90 rounded-lg overflow-hidden border border-white/20">
             {/* Header */}
-            <div className="bg-gradient-to-r from-blue-600 to-blue-700 p-6 md:p-8">
+            <div className="bg-emerald-700 p-6 md:p-8">
               <div className="flex items-center justify-between">
                 <div>
                   <h1 className="text-2xl md:text-3xl font-bold text-white">New Booking Entry</h1>
                   <p className="text-blue-100 mt-2">Create a new travel booking for your customer</p>
                 </div>
-                <div className="hidden md:block p-3 bg-white/10 rounded-xl">
+                <div className="hidden md:block p-3 bg-white/10 rounded-lg">
                   <span className="text-white font-semibold">📋 Booking Form</span>
                 </div>
               </div>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-6 md:p-8">
+            <form noValidate onSubmit={handleSubmit} className="p-6 md:p-8">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {/* Customer Details */}
                 <motion.div 
@@ -255,7 +257,7 @@ export default function BookingEntryPage() {
                   animate={{ opacity: 1, y: 0 }}
                   className="space-y-4"
                 >
-                  <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100">
+                  <div className="bg-white py-4 border-b border-gray-200">
                     <h3 className="text-lg font-semibold text-blue-800 mb-4 flex items-center">
                       <span className="mr-2">👤</span>
                       Customer Details
@@ -263,30 +265,30 @@ export default function BookingEntryPage() {
                     <div className="space-y-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Full Name *
+                          Full Name
                         </label>
                         <input
                           type="text"
                           name="customerName"
                           value={formData.customerName}
                           onChange={handleChange}
-                          required
-                          className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white/70 backdrop-blur-sm transition-all"
+
+                          className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white/70 backdrop-blur-sm transition-all"
                           placeholder="Enter customer name"
                         />
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Phone Number *
+                          Phone Number
                         </label>
                         <input
                           type="tel"
                           name="phone"
                           value={formData.phone}
                           onChange={handleChange}
-                          required
+
                           pattern="[0-9]{10}"
-                          className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white/70 backdrop-blur-sm"
+                          className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white/70 backdrop-blur-sm"
                           placeholder="9876543210"
                         />
                       </div>
@@ -301,7 +303,7 @@ export default function BookingEntryPage() {
                   transition={{ delay: 0.1 }}
                   className="space-y-4"
                 >
-                  <div className="bg-emerald-50/50 p-4 rounded-xl border border-emerald-100">
+                  <div className="bg-white py-4 border-b border-gray-200">
                     <h3 className="text-lg font-semibold text-emerald-800 mb-4 flex items-center">
                       <span className="mr-2">📍</span>
                       Journey Details
@@ -309,29 +311,29 @@ export default function BookingEntryPage() {
                     <div className="space-y-4">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                          From *
+                          From
                         </label>
                         <input
                           type="text"
                           name="from"
                           value={formData.from}
                           onChange={handleChange}
-                          required
-                          className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-white/70 backdrop-blur-sm"
+
+                          className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-white/70 backdrop-blur-sm"
                           placeholder="Starting location"
                         />
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                          To *
+                          To
                         </label>
                         <input
                           type="text"
                           name="to"
                           value={formData.to}
                           onChange={handleChange}
-                          required
-                          className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-white/70 backdrop-blur-sm"
+
+                          className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-white/70 backdrop-blur-sm"
                           placeholder="Destination"
                         />
                       </div>
@@ -346,7 +348,7 @@ export default function BookingEntryPage() {
                   transition={{ delay: 0.2 }}
                   className="space-y-4"
                 >
-                  <div className="bg-purple-50/50 p-4 rounded-xl border border-purple-100">
+                  <div className="bg-white py-4 border-b border-gray-200">
                     <h3 className="text-lg font-semibold text-purple-800 mb-4 flex items-center">
                       <span className="mr-2">🚗</span>
                       Travel Details
@@ -355,14 +357,14 @@ export default function BookingEntryPage() {
                       {/* Booking Date */}
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Booking Date *
+                          Booking Date
                         </label>
                         <div className="relative">
                           <DatePicker
                             selected={formData.bookingDate}
                             onChange={handleDateChange}
                             dateFormat="dd/MM/yyyy"
-                            className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white/70 backdrop-blur-sm"
+                            className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white/70 backdrop-blur-sm"
                             placeholderText="Select booking date"
                           />
                           <div className="absolute right-3 top-3 text-gray-400">
@@ -374,11 +376,11 @@ export default function BookingEntryPage() {
                       {/* Dynamic Vehicle Selection */}
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Vehicle *
+                          Vehicle
                         </label>
                         <div className="relative">
                           {loadingVehicles ? (
-                            <div className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-white/70">
+                            <div className="w-full px-4 py-3 border border-gray-200 rounded-lg bg-white/70">
                               <div className="flex items-center">
                                 <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-600 mr-2"></div>
                                 <span className="text-gray-500">Loading vehicles...</span>
@@ -389,8 +391,8 @@ export default function BookingEntryPage() {
                               name="vehicle"
                               value={formData.vehicle}
                               onChange={handleChange}
-                              required
-                              className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white/70 backdrop-blur-sm appearance-none"
+
+                              className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white/70 backdrop-blur-sm appearance-none"
                             >
                               <option value="">Select Vehicle</option>
                               {availableVehicles.map((vehicle, index) => (
@@ -442,7 +444,7 @@ export default function BookingEntryPage() {
                   transition={{ delay: 0.3 }}
                   className="md:col-span-2 lg:col-span-3"
                 >
-                  <div className="bg-indigo-50/50 p-4 rounded-xl border border-indigo-100">
+                  <div className="bg-white py-4 border-b border-gray-200">
                     <h3 className="text-lg font-semibold text-indigo-800 mb-4 flex items-center">
                       <span className="mr-2">📊</span>
                       Additional Details
@@ -459,7 +461,7 @@ export default function BookingEntryPage() {
                           onChange={handleChange}
                           min="1"
                           max={getVehicleCapacity(formData.vehicle)}
-                          className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white/70 backdrop-blur-sm"
+                          className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white/70 backdrop-blur-sm"
                           placeholder={`Max: ${getVehicleCapacity(formData.vehicle)}`}
                         />
                         <p className="text-xs text-gray-500 mt-1">
@@ -474,7 +476,7 @@ export default function BookingEntryPage() {
                           name="tripType"
                           value={formData.tripType}
                           onChange={handleChange}
-                          className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white/70 backdrop-blur-sm"
+                          className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white/70 backdrop-blur-sm"
                         >
                           <option value="one-way">One Way</option>
                           <option value="round-trip">Round Trip</option>
@@ -487,8 +489,8 @@ export default function BookingEntryPage() {
                         <label className="block text-sm font-medium text-gray-700 mb-2">
                           Booking Time
                         </label>
-                        <div className="px-4 py-3 bg-white/70 border border-gray-200 rounded-xl text-gray-700">
-                          {formData.bookingDate.toLocaleTimeString([], { 
+                        <div className="px-4 py-3 bg-white/70 border border-gray-200 rounded-lg text-gray-700">
+                          {formData.bookingDate?.toLocaleTimeString([], {
                             hour: '2-digit', 
                             minute: '2-digit',
                             hour12: true 
@@ -502,39 +504,23 @@ export default function BookingEntryPage() {
                           Assign Driver (optional)
                         </label>
                         {loadingDrivers ? (
-                          <div className="w-full px-4 py-3 border border-gray-200 rounded-xl bg-white/70">
+                          <div className="w-full px-4 py-3 border border-gray-200 rounded-lg bg-white/70">
                             <div className="flex items-center">
                               <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-indigo-600 mr-2"></div>
                               <span className="text-gray-500">Loading drivers...</span>
                             </div>
                           </div>
-                        ) : availableDrivers.length === 0 ? (
-                          <p className="text-xs text-gray-500">
-                            No available drivers found. You can add drivers from the Drivers Management page.
-                          </p>
                         ) : (
                           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <select
-                              name="driverName"
-                              value={formData.driverName}
-                              onChange={handleChange}
-                              className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white/70 backdrop-blur-sm"
-                            >
-                              <option value="">Select Driver (optional)</option>
-                              {availableDrivers.map((driver) => (
-                                <option key={driver.driverId} value={driver.name}>
-                                  {driver.name} {driver.phone && `- ${driver.phone}`}
-                                  {driver.experience && ` (${driver.experience})`}
-                                </option>
-                              ))}
-                            </select>
+                            <input aria-label="Driver name" name="driverName" list="entry-drivers" value={formData.driverName} onChange={handleChange} placeholder="Driver name" className="w-full px-4 py-3 border border-gray-200 rounded-lg" />
+                            <datalist id="entry-drivers">{availableDrivers.map(driver => <option key={driver.driverId} value={driver.name} />)}</datalist>
                             <input
                               type="tel"
                               name="driverPhone"
                               value={formData.driverPhone}
                               onChange={handleChange}
                               placeholder="Driver phone"
-                              className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white/70 backdrop-blur-sm"
+                              className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white/70 backdrop-blur-sm"
                             />
                             <div className="text-xs text-gray-500 flex items-center">
                               <span className="mr-2">👨‍✈️</span>
@@ -547,6 +533,15 @@ export default function BookingEntryPage() {
                   </div>
                 </motion.div>
 
+                <section className="md:col-span-2 lg:col-span-3 border-y border-gray-200 py-5 grid grid-cols-1 md:grid-cols-3 gap-5">
+                  <div><p className="text-sm text-gray-600">Fuel Average</p><p className="text-xl font-semibold text-emerald-700">{getVehicleAverage(formData.vehicle)} km/L</p></div>
+                  {['fuel', 'toll'].map(kind => <label key={kind} className="text-sm font-medium text-gray-700">
+                    {kind === 'fuel' ? 'Oil / Fuel Paid By' : 'Toll Tax Paid By'}
+                    <select name={kind + 'PaidBy'} value={formData[kind + 'PaidBy'] || 'company'} onChange={handleChange} className="mt-2 w-full border border-gray-300 rounded-lg px-3 py-3 bg-white">
+                      <option value="company">Company</option><option value="customer">Customer</option>
+                    </select>
+                  </label>)}
+                </section>
                 {/* Financial Details */}
                 <motion.div 
                   initial={{ opacity: 0, y: 20 }}
@@ -554,7 +549,7 @@ export default function BookingEntryPage() {
                   transition={{ delay: 0.4 }}
                   className="md:col-span-2 lg:col-span-3"
                 >
-                  <div className="bg-amber-50/50 p-6 rounded-xl border border-amber-100">
+                  <div className="bg-white py-6 border-b border-gray-200">
                     <h3 className="text-lg font-semibold text-amber-800 mb-6 flex items-center">
                       <span className="mr-2">💰</span>
                       Financial Details
@@ -562,16 +557,16 @@ export default function BookingEntryPage() {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Total Amount (₹) *
+                          Total Amount (₹)
                         </label>
                         <input
                           type="number"
                           name="bookingAmount"
                           value={formData.bookingAmount}
                           onChange={handleChange}
-                          required
+
                           min="0"
-                          className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 bg-white/70 backdrop-blur-sm text-lg font-semibold"
+                          className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 bg-white/70 backdrop-blur-sm text-lg font-semibold"
                           placeholder="5000"
                         />
                       </div>
@@ -585,7 +580,7 @@ export default function BookingEntryPage() {
                           value={formData.advance}
                           onChange={handleChange}
                           min="0"
-                          className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 bg-white/70 backdrop-blur-sm"
+                          className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 bg-white/70 backdrop-blur-sm"
                           placeholder="2000"
                         />
                       </div>
@@ -593,8 +588,8 @@ export default function BookingEntryPage() {
                         <label className="block text-sm font-medium text-gray-700 mb-2">
                           Balance (₹)
                         </label>
-                        <div className="px-4 py-3 bg-gray-50/70 backdrop-blur-sm border border-gray-200 rounded-xl text-lg font-semibold text-gray-800">
-                          ₹{((parseInt(formData.bookingAmount) || 0) - (parseInt(formData.advance) || 0)).toLocaleString('en-IN')}
+                        <div className="px-4 py-3 bg-gray-50/70 backdrop-blur-sm border border-gray-200 rounded-lg text-lg font-semibold text-gray-800">
+                          ₹{((parseFloat(formData.bookingAmount) || 0) - (parseFloat(formData.advance) || 0)).toLocaleString('en-IN')}
                         </div>
                       </div>
                     </div>
@@ -609,7 +604,7 @@ export default function BookingEntryPage() {
                         value={formData.notes}
                         onChange={handleChange}
                         rows="2"
-                        className="w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-amber-500 focus:border-amber-500 bg-white/70 backdrop-blur-sm"
+                        className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 bg-white/70 backdrop-blur-sm"
                         placeholder="Any special requirements, pickup time, or notes..."
                       />
                     </div>
@@ -623,13 +618,13 @@ export default function BookingEntryPage() {
                   <button
                     type="button"
                     onClick={() => router.push('/')}
-                    className="px-6 py-3 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 transition-all duration-300 flex items-center"
+                    className="px-6 py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-all duration-300 flex items-center"
                   >
                     <span className="mr-2">←</span>
                     Back to Dashboard
                   </button>
                 </div>
-                <div className="flex space-x-4">
+                <div className="flex flex-wrap gap-3">
                   <button
                     type="button"
                     onClick={() => {
@@ -639,7 +634,9 @@ export default function BookingEntryPage() {
                         from: '',
                         to: '',
                         vehicle: availableVehicles.length > 0 ? availableVehicles[0].name : 'Innova',
-                        driverName: '',
+                        fuelPaidBy: 'company',
+    tollPaidBy: 'company',
+    driverName: '',
                         driverPhone: '',
                         bookingAmount: '',
                         advance: '',
@@ -649,14 +646,14 @@ export default function BookingEntryPage() {
                         notes: ''
                       });
                     }}
-                    className="px-6 py-3 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 transition-all duration-300"
+                    className="px-6 py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-all duration-300"
                   >
                     Clear All
                   </button>
                   <button
                     type="submit"
                     disabled={loading || loadingVehicles}
-                    className="px-8 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all duration-300 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                    className="px-8 py-3 bg-emerald-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-300 shadow-lg hover:shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
                   >
                     {loading ? (
                       <>
@@ -679,6 +676,6 @@ export default function BookingEntryPage() {
           </div>
         </div>
       </div>
-    </TravelBackground>
+    </div>
   );
 }

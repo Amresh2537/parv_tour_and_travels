@@ -1,5 +1,6 @@
 'use client';
 
+import { expenseTotals } from '@/lib/expenses';
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { bookingApi, formatCurrency, formatDate, statusManager } from '@/lib/api';
@@ -79,35 +80,10 @@ export default function BookingTripPage() {
     const expenses = [];
     let total = 0;
 
-    // Fuel expenses
-    const fuelDetails = calculateFuelDetails();
-    if (fuelDetails) {
-      expenses.push({
-        category: 'Fuel',
-        amount: parseFloat(fuelDetails.fuelCost),
-        description: `${fuelDetails.liters}L @ ₹${fuelDetails.rate}/L`
-      });
-      total += parseFloat(fuelDetails.fuelCost);
-    }
-
-    // Other expenses
-    if (booking.fuelCost && parseFloat(booking.fuelCost) > 0) {
-      expenses.push({
-        category: 'Fuel',
-        amount: parseFloat(booking.fuelCost),
-        description: 'Fuel cost'
-      });
-      total += parseFloat(booking.fuelCost);
-    }
-
-    if (booking.tollAmount && parseFloat(booking.tollAmount) > 0 && booking.tollPaidBy === 'company') {
-      expenses.push({
-        category: 'Toll Tax',
-        amount: parseFloat(booking.tollAmount),
-        description: 'Toll charges'
-      });
-      total += parseFloat(booking.tollAmount);
-    }
+    const totals = expenseTotals(booking);
+    if (totals.companyFuel) expenses.push({ category: 'Fuel', amount: totals.companyFuel, description: 'Company-paid fuel' });
+    if (totals.companyToll) expenses.push({ category: 'Toll Tax', amount: totals.companyToll, description: 'Company-paid toll' });
+    total = totals.companyFuel + totals.companyToll;
 
     if (booking.driverPayment && parseFloat(booking.driverPayment) > 0) {
       expenses.push({
@@ -237,7 +213,7 @@ export default function BookingTripPage() {
               Booking not found
             </h3>
             <p className="text-gray-500 mb-6 max-w-md mx-auto">
-              The booking you're looking for doesn't exist or has been removed.
+              The booking you requested does not exist or has been removed.
             </p>
             <Link
               href="/"

@@ -6,6 +6,7 @@ import { bookingApi } from '@/lib/api';
 
 export default function DriverPage() {
   const router = useRouter();
+  const [notice, setNotice] = useState('');
   const [loading, setLoading] = useState(false);
   const [bookingId, setBookingId] = useState('');
   const [drivers, setDrivers] = useState([]);
@@ -34,9 +35,11 @@ export default function DriverPage() {
     
     // Load saved data
     const savedDriver = localStorage.getItem('driverData');
-    if (savedDriver) {
-      setFormData(JSON.parse(savedDriver));
-    }
+    const saved = JSON.parse(savedDriver || '{}');
+    if (saved.bookingId === id) setFormData(prev => ({ ...prev, ...saved }));
+    bookingApi.getById(id).then(result => {
+      if (result.success) setFormData(prev => ({ ...prev, ...result.data, ...(saved.bookingId === id ? saved : {}) }));
+    });
     
     // Load drivers and vehicles from database
     loadDriversAndVehicles();
@@ -98,6 +101,9 @@ export default function DriverPage() {
         }));
       }
     } 
+    else if (name === 'driverName') {
+      setFormData(prev => ({ ...prev, driverName: value, driverId: '', selectedDriver: null }));
+    }
     else {
       setFormData(prev => ({
         ...prev,
@@ -112,7 +118,7 @@ export default function DriverPage() {
 
     try {
       // Save to local storage
-      localStorage.setItem('driverData', JSON.stringify(formData));
+      localStorage.setItem('driverData', JSON.stringify({ ...formData, bookingId }));
       
       // Update driver and vehicle status in database
       if (formData.driverId) {
@@ -134,6 +140,9 @@ export default function DriverPage() {
       
    const result = await bookingApi.addDriver({
   bookingId: bookingId,
+  driverId: formData.driverId,
+  vehicleId: formData.vehicleId,
+  vehicleType: formData.vehicleType,
   driverName: formData.driverName,
   driverPhone: formData.driverPhone,
   vehicleAverage: formData.vehicleAverage,
@@ -157,7 +166,7 @@ export default function DriverPage() {
   };
 
   const showNotification = (message, type = 'success') => {
-    // Your notification code here
+    setNotice(message);
   };
 
   if (loadingData) {
@@ -181,7 +190,14 @@ export default function DriverPage() {
           <p className="text-sm text-gray-600">Select from available drivers and vehicles</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
+        <form noValidate onSubmit={handleSubmit} className="space-y-6">
+          {notice && <p role="status" className="p-3 bg-amber-50 text-amber-900">{notice}</p>}
+          <label className="block text-sm font-medium text-gray-700">Driver Name
+            <input name="driverName" value={formData.driverName} onChange={handleChange} className="mt-2 w-full px-4 py-3 border border-gray-300 rounded-lg" />
+          </label>
+          <label className="block text-sm font-medium text-gray-700">Driver Phone
+            <input name="driverPhone" type="tel" value={formData.driverPhone} onChange={handleChange} className="mt-2 w-full px-4 py-3 border border-gray-300 rounded-lg" />
+          </label>
           {/* Driver Selection */}
           <div className="space-y-4">
             <h3 className="text-lg font-semibold text-gray-700">Select Driver</h3>
@@ -201,13 +217,13 @@ export default function DriverPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Select Driver *
+                    Select Driver
                   </label>
                   <select
                     name="driverId"
                     value={formData.driverId}
                     onChange={handleChange}
-                    required
+
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   >
                     <option value="">Choose a driver</option>
@@ -263,13 +279,13 @@ export default function DriverPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Select Vehicle *
+                    Select Vehicle
                   </label>
                   <select
                     name="vehicleId"
                     value={formData.vehicleId}
                     onChange={handleChange}
-                    required
+
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   >
                     <option value="">Choose a vehicle</option>
@@ -290,7 +306,7 @@ export default function DriverPage() {
                     name="vehicleAverage"
                     value={formData.vehicleAverage}
                     onChange={handleChange}
-                    required
+
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
@@ -312,14 +328,14 @@ export default function DriverPage() {
           {/* Start KM Reading */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              Start Kilometer Reading *
+              Start Kilometer Reading
             </label>
             <input
               type="number"
               name="startKM"
               value={formData.startKM}
               onChange={handleChange}
-              required
+
               min="0"
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               placeholder="Current odometer reading"
@@ -350,7 +366,7 @@ export default function DriverPage() {
             
             <button
               type="submit"
-              disabled={loading || !formData.driverId || !formData.vehicleId || !formData.startKM}
+              disabled={loading}
               className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? 'Assigning...' : 'Assign & Continue'}

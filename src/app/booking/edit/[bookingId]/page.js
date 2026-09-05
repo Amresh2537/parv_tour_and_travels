@@ -1,5 +1,6 @@
 'use client';
 
+import { expenseTotals } from '@/lib/expenses';
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { bookingApi, formatCurrency, formatDate } from '@/lib/api';
@@ -170,6 +171,11 @@ export default function EditBookingPage() {
           to: booking.to || '',
           vehicle: booking.vehicle || '',
           vehicleAverage: booking.vehicleAverage || '12',
+          fuelPaidBy: booking.fuelPaidBy || 'company',
+          tollPaidBy: booking.tollPaidBy || 'company',
+          maintenance: booking.maintenance || '',
+          food: booking.food || '',
+          parking: booking.parking || '',
           bookingAmount: booking.bookingAmount || '',
           advance: booking.advance || '',
           status: booking.status || 'pending',
@@ -320,7 +326,7 @@ export default function EditBookingPage() {
       const toll = parseFloat(updated.toll) || 0;
       const driverPayment = parseFloat(updated.driverPayment) || 0;
       const otherExpenses = parseFloat(updated.otherExpenses) || 0;
-      updated.totalExpenses = (fuelCost + toll + driverPayment + otherExpenses).toFixed(2);
+      updated.totalExpenses = expenseTotals(updated).totalExpenses.toFixed(2);
       
       // Recalculate profit and outstanding
       const bookingAmount = parseFloat(updated.bookingAmount) || 0;
@@ -328,7 +334,7 @@ export default function EditBookingPage() {
       const totalExp = parseFloat(updated.totalExpenses) || 0;
       
       updated.netProfit = (bookingAmount - totalExp).toFixed(2);
-      updated.outstanding = (bookingAmount - advance - totalExp).toFixed(2);
+      updated.outstanding = (bookingAmount - advance).toFixed(2);
       
       return updated;
     });
@@ -354,9 +360,9 @@ export default function EditBookingPage() {
     
     try {
       // Format date for API (ISO string)
-      const bookingDateStr = formData.date.toISOString();
+      const bookingDateStr = formData.date?.toISOString() || '';
       // Format for display (DD/MM/YYYY)
-      const displayDate = formData.date.toLocaleDateString('en-IN');
+      const displayDate = formData.date?.toLocaleDateString('en-IN') || '';
       
       // Use the updateBooking API directly
       const updateRes = await bookingApi.updateBooking({
@@ -382,6 +388,8 @@ export default function EditBookingPage() {
         liters: formData.liters,
         fuelCost: formData.fuelCost,
         toll: formData.toll,
+        fuelPaidBy: formData.fuelPaidBy,
+        tollPaidBy: formData.tollPaidBy,
         driverPayment: formData.driverPayment,
         otherExpenses: formData.otherExpenses,
         totalExpenses: formData.totalExpenses,
@@ -514,7 +522,14 @@ export default function EditBookingPage() {
         </div>
         
         {/* Form */}
-        <form onSubmit={handleSubmit} className="bg-white rounded-xl shadow-lg p-6">
+        <form noValidate onSubmit={handleSubmit} className="bg-white rounded-xl shadow-lg p-6">
+          <div className="grid sm:grid-cols-2 gap-4 mb-6">
+            {['fuel', 'toll'].map(kind => <label key={kind} className="text-sm font-medium">{kind === 'fuel' ? 'Oil / Fuel Paid By' : 'Toll Tax Paid By'}
+              <select name={kind + 'PaidBy'} value={formData[kind + 'PaidBy'] || 'company'} onChange={handleChange} className="mt-2 w-full border border-gray-300 rounded-lg p-3">
+                <option value="company">Company</option><option value="customer">Customer</option>
+              </select>
+            </label>)}
+          </div>
           {/* Booking ID & Date */}
           <div className="mb-8 p-4 bg-blue-50 rounded-lg">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -532,7 +547,7 @@ export default function EditBookingPage() {
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Booking Date *
+                  Booking Date
                 </label>
                 <div className="relative">
                   <DatePicker
@@ -556,28 +571,28 @@ export default function EditBookingPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Customer Name *
+                  Customer Name
                 </label>
                 <input
                   type="text"
                   name="customerName"
                   value={formData.customerName}
                   onChange={handleChange}
-                  required
+
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 />
               </div>
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Phone Number *
+                  Phone Number
                 </label>
                 <input
                   type="tel"
                   name="phone"
                   value={formData.phone}
                   onChange={handleChange}
-                  required
+
                   pattern="[0-9]{10}"
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 />
@@ -585,28 +600,28 @@ export default function EditBookingPage() {
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Pickup Location *
+                  Pickup Location
                 </label>
                 <input
                   type="text"
                   name="from"
                   value={formData.from}
                   onChange={handleChange}
-                  required
+
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 />
               </div>
               
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Drop Location *
+                  Drop Location
                 </label>
                 <input
                   type="text"
                   name="to"
                   value={formData.to}
                   onChange={handleChange}
-                  required
+
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 />
               </div>
@@ -620,7 +635,7 @@ export default function EditBookingPage() {
               {/* Dynamic Vehicle Selection */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Vehicle *
+                  Vehicle
                 </label>
                 {loadingDropdowns ? (
                   <div className="w-full px-4 py-2.5 border border-gray-300 rounded-lg bg-gray-100">
@@ -635,7 +650,7 @@ export default function EditBookingPage() {
                       name="vehicle"
                       value={formData.vehicle}
                       onChange={handleChange}
-                      required
+
                       className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 appearance-none"
                     >
                       <option value="">Select Vehicle</option>
@@ -679,7 +694,7 @@ export default function EditBookingPage() {
                     name="vehicle"
                     value={formData.vehicle}
                     onChange={handleChange}
-                    required
+
                     className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                     placeholder="Enter vehicle name"
                   />
@@ -746,14 +761,14 @@ export default function EditBookingPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Booking Amount (₹) *
+                  Booking Amount (₹)
                 </label>
                 <input
                   type="number"
                   name="bookingAmount"
                   value={formData.bookingAmount}
                   onChange={handleChange}
-                  required
+
                   min="0"
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 />
@@ -797,25 +812,8 @@ export default function EditBookingPage() {
                     Loading drivers...
                   </div>
                 ) : (
-                  <select
-                    name="driverName"
-                    value={formData.driverName}
-                    onChange={handleChange}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">{driverOptions.length ? 'Select Driver' : 'No drivers available'}</option>
-                    {driverOptions.map(driver => (
-                      <option 
-                        key={driver.id || driver.name} 
-                        value={driver.name}
-                      >
-                        {driver.name} - {driver.phone}
-                        {driver.status ? ` [${driver.status}]` : ''}
-                        {driver.experience ? ` (${driver.experience})` : ''}
-                      </option>
-                    ))}
-                    <option value="Other">Other (Manual Entry)</option>
-                  </select>
+                  <><input name="driverName" aria-label="Driver name" list="edit-drivers" value={formData.driverName} onChange={handleChange} className="w-full px-4 py-2.5 border border-gray-300 rounded-lg" />
+                  <datalist id="edit-drivers">{driverOptions.map(driver => <option key={driver.id || driver.name} value={driver.name} />)}</datalist></>
                 )}
               </div>
               

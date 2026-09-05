@@ -12,15 +12,23 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
+html { color-scheme: light; }
 
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+.booking-workspace { letter-spacing: 0; }
+.booking-workspace input, .booking-workspace select, .booking-workspace textarea {
+  color: #171717;
+  max-width: 100%;
+}
+.booking-workspace .react-datepicker-wrapper { width: 100%; }
+.booking-workspace button { white-space: normal; }
+.booking-workspace h1, .booking-workspace p { overflow-wrap: anywhere; }
+@media print {
+  nav, button { display: none !important; }
+  .booking-workspace { background: white; }
 }

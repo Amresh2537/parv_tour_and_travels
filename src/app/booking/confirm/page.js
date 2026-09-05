@@ -73,15 +73,15 @@ export default function ConfirmPage() {
               <div className="space-y-3">
                 <div>
                   <div className="text-sm text-gray-600">Customer Name</div>
-                  <div className="font-medium text-lg">{bookingData.customerName}</div>
+                  <div className="font-medium text-lg">{bookingData.customerName || 'Not entered'}</div>
                 </div>
                 <div>
                   <div className="text-sm text-gray-600">Phone Number</div>
-                  <div className="font-medium">{bookingData.phone}</div>
+                  <div className="font-medium">{bookingData.phone || 'Not entered'}</div>
                 </div>
                 <div>
                   <div className="text-sm text-gray-600">Booking Date</div>
-                  <div className="font-medium">{bookingData.date}</div>
+                  <div className="font-medium">{bookingData.bookingDate ? new Date(bookingData.bookingDate).toLocaleDateString('en-IN') : 'Not entered'}</div>
                 </div>
               </div>
             </div>
@@ -92,12 +92,12 @@ export default function ConfirmPage() {
                 <div>
                   <div className="text-sm text-gray-600">Route</div>
                   <div className="font-medium text-lg">
-                    {bookingData.from} → {bookingData.to}
+                    {bookingData.from || 'Not entered'} → {bookingData.to || 'Not entered'}
                   </div>
                 </div>
                 <div>
                   <div className="text-sm text-gray-600">Vehicle Type</div>
-                  <div className="font-medium">{bookingData.vehicle}</div>
+                  <div className="font-medium">{bookingData.vehicle || 'Not selected'}</div>
                 </div>
                 <div>
                   <div className="text-sm text-gray-600">Booking Amount</div>

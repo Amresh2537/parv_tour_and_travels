@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { bookingApi, formatCurrency, formatDate } from '@/lib/api';
-import { TravelBackground } from '@/components/TravelBackground';
+import { bookingApi, formatCurrency } from '@/lib/api';
+import { expenseTotals } from '@/lib/expenses';
 import { motion } from 'framer-motion';
 
 export default function CalculationPage() {
@@ -33,27 +33,10 @@ export default function CalculationPage() {
       // Load booking details
       const bookingRes = await bookingApi.getById(id);
       
-      // Load calculations from localStorage
-      const savedCalculations = JSON.parse(localStorage.getItem('calculations') || '{}');
-      const expensesData = JSON.parse(localStorage.getItem('expensesData') || '{}');
-      const driverData = JSON.parse(localStorage.getItem('driverData') || '{}');
-      
       if (bookingRes.success) {
         setBooking(bookingRes.data);
-      } else {
-        // Fallback: Use last booking from localStorage
-        const lastBooking = JSON.parse(localStorage.getItem('lastBooking') || '{}');
-        if (lastBooking.bookingId === id) {
-          setBooking(lastBooking);
-        }
+        setCalculations({ ...bookingRes.data, ...expenseTotals(bookingRes.data) });
       }
-      
-      // Set calculations
-      setCalculations({
-        ...savedCalculations,
-        ...expensesData,
-        ...driverData
-      });
       
     } catch (error) {
       console.error('Error loading data:', error);
@@ -94,8 +77,7 @@ export default function CalculationPage() {
           }));
         }
         
-        // Mark as completed
-        await bookingApi.updateStatus(bookingId, 'completed', 'Profit calculated');
+
         
       } else {
         showNotification(`⚠️ ${result.error || 'Failed to calculate profit'}`, 'warning');
@@ -177,7 +159,7 @@ export default function CalculationPage() {
 
   if (loading) {
     return (
-      <TravelBackground variant="minimal">
+      <div className="booking-workspace bg-gray-50 text-gray-900">
         <div className="min-h-screen flex items-center justify-center">
           <div className="text-center">
             <div className="relative">
@@ -187,13 +169,13 @@ export default function CalculationPage() {
             <p className="mt-4 text-gray-600 font-medium">Loading calculations...</p>
           </div>
         </div>
-      </TravelBackground>
+      </div>
     );
   }
 
   if (!booking || !calculations) {
     return (
-      <TravelBackground variant="minimal">
+      <div className="booking-workspace bg-gray-50 text-gray-900">
         <div className="min-h-screen flex items-center justify-center">
           <div className="text-center">
             <div className="inline-flex items-center justify-center w-20 h-20 rounded-full bg-red-50 mb-6">
@@ -207,13 +189,13 @@ export default function CalculationPage() {
             </p>
             <button
               onClick={() => router.push('/booking/entry')}
-              className="px-6 py-3 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg hover:shadow-xl"
+              className="px-6 py-3 bg-emerald-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all shadow-lg hover:shadow-sm"
             >
               ← Back to Booking
             </button>
           </div>
         </div>
-      </TravelBackground>
+      </div>
     );
   }
 
@@ -223,7 +205,7 @@ export default function CalculationPage() {
   const balance = revenue - advance;
 
   return (
-    <TravelBackground variant="minimal">
+    <div className="booking-workspace bg-gray-50 text-gray-900">
       <div className="min-h-screen p-4 md:p-8">
         <div className="max-w-6xl mx-auto">
           {/* Header */}
@@ -232,21 +214,21 @@ export default function CalculationPage() {
             animate={{ opacity: 1, y: 0 }}
             className="mb-8"
           >
-            <div className="backdrop-blur-lg bg-white/90 rounded-2xl p-6 md:p-8 shadow-xl border border-white/20">
+            <div className="backdrop-blur-lg bg-white/90 rounded-lg p-6 md:p-8 shadow-sm border border-white/20">
               <div className="flex flex-col md:flex-row md:items-center justify-between">
                 <div>
-                  <h1 className="text-3xl font-bold bg-gradient-to-r from-emerald-600 to-green-700 bg-clip-text text-transparent">
+                  <h1 className="text-3xl font-bold text-gray-900">
                     Profit Calculation
                   </h1>
                   <p className="text-gray-600 mt-2">Finalize trip calculations and complete booking</p>
-                  <div className="flex items-center mt-3">
+                  <div className="flex flex-wrap gap-y-2 items-center mt-3">
                     <div className="flex items-center text-sm text-gray-500">
                       <span className="w-2 h-2 bg-green-500 rounded-full mr-2 animate-pulse"></span>
                       Booking ID: <span className="font-mono ml-2 font-semibold">{bookingId}</span>
                     </div>
                     <span className="mx-3 text-gray-300">•</span>
                     <div className="text-sm text-gray-500">
-                      Customer: {booking.customerName}
+                      Customer: {booking.customerName || 'Not entered'}
                     </div>
                   </div>
                 </div>
@@ -254,7 +236,7 @@ export default function CalculationPage() {
                 <div className="flex items-center space-x-3 mt-4 md:mt-0">
                   <button
                     onClick={handlePrint}
-                    className="px-4 py-2.5 border border-gray-200 rounded-xl text-gray-700 hover:bg-gray-50/50 transition-colors backdrop-blur-sm flex items-center"
+                    className="px-4 py-2.5 border border-gray-200 rounded-lg text-gray-700 hover:bg-gray-50/50 transition-colors backdrop-blur-sm flex items-center"
                   >
                     <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
@@ -273,7 +255,7 @@ export default function CalculationPage() {
               initial={{ opacity: 0, x: -20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.1 }}
-              className="backdrop-blur-lg bg-white/90 rounded-2xl shadow-xl border border-white/20 p-6"
+              className="backdrop-blur-lg bg-white/90 rounded-lg border-gray-200 border border-white/20 p-6"
             >
               <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center">
                 <span className="mr-2">💰</span>
@@ -305,7 +287,7 @@ export default function CalculationPage() {
               initial={{ opacity: 0, y: -20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
-              className="backdrop-blur-lg bg-white/90 rounded-2xl shadow-xl border border-white/20 p-6"
+              className="backdrop-blur-lg bg-white/90 rounded-lg border-gray-200 border border-white/20 p-6"
             >
               <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center">
                 <span className="mr-2">📊</span>
@@ -315,7 +297,7 @@ export default function CalculationPage() {
               <div className="space-y-3">
                 <div className="flex justify-between items-center">
                   <span className="text-gray-600">Fuel Cost</span>
-                  <span className="font-medium">{formatCurrency(calculations.fuelCost || 0)}</span>
+                  <span className="font-medium">{formatCurrency(calculations.companyFuel || 0)}</span>
                 </div>
                 
                 <div className="flex justify-between items-center">
@@ -325,12 +307,12 @@ export default function CalculationPage() {
                 
                 <div className="flex justify-between items-center">
                   <span className="text-gray-600">Toll Charges</span>
-                  <span className="font-medium">{formatCurrency(calculations.toll || 0)}</span>
+                  <span className="font-medium">{formatCurrency(calculations.companyToll || 0)}</span>
                 </div>
                 
                 <div className="flex justify-between items-center">
                   <span className="text-gray-600">Other Expenses</span>
-                  <span className="font-medium">{formatCurrency(calculations.otherExpenses || 0)}</span>
+                  <span className="font-medium">{formatCurrency(['otherExpenses', 'maintenance', 'food', 'parking'].reduce((sum, key) => sum + (Number(calculations[key]) || 0), 0))}</span>
                 </div>
                 
                 <div className="pt-3 border-t border-gray-200">
@@ -347,7 +329,7 @@ export default function CalculationPage() {
               initial={{ opacity: 0, x: 20 }}
               animate={{ opacity: 1, x: 0 }}
               transition={{ delay: 0.3 }}
-              className="backdrop-blur-lg bg-white/90 rounded-2xl shadow-xl border border-white/20 p-6"
+              className="backdrop-blur-lg bg-white/90 rounded-lg border-gray-200 border border-white/20 p-6"
             >
               <h2 className="text-xl font-bold text-gray-800 mb-6 flex items-center">
                 <span className="mr-2">📈</span>
@@ -379,12 +361,13 @@ export default function CalculationPage() {
             </motion.div>
           </div>
 
+          <p className="mb-6 text-sm text-gray-600">Customer-paid costs: {formatCurrency(calculations.customerPaid)} | Oil / Fuel: {booking.fuelPaidBy || 'company'} | Toll: {booking.tollPaidBy || 'company'}</p>
           {/* Trip Details */}
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4 }}
-            className="backdrop-blur-lg bg-white/90 rounded-2xl shadow-xl border border-white/20 p-6 mb-8"
+            className="backdrop-blur-lg bg-white/90 rounded-lg border-gray-200 border border-white/20 p-6 mb-8"
           >
             <h2 className="text-xl font-bold text-gray-800 mb-6">Trip Details</h2>
             
@@ -401,7 +384,7 @@ export default function CalculationPage() {
               
               <div>
                 <p className="text-sm text-gray-600 mb-1">Fuel Consumed</p>
-                <p className="text-lg font-semibold text-blue-600">{calculations.liters?.toFixed(2) || 0} Liters</p>
+                <p className="text-lg font-semibold text-blue-600">{(Number(calculations.liters) || 0).toFixed(2)} Liters</p>
               </div>
               
               <div>
@@ -416,7 +399,7 @@ export default function CalculationPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.5 }}
-            className="backdrop-blur-lg bg-white/90 rounded-2xl shadow-xl border border-white/20 p-6"
+            className="backdrop-blur-lg bg-white/90 rounded-lg border-gray-200 border border-white/20 p-6"
           >
             <div className="flex flex-col md:flex-row md:items-center justify-between">
               <div className="mb-4 md:mb-0">
@@ -429,7 +412,7 @@ export default function CalculationPage() {
               <div className="flex flex-wrap gap-3">
                 <button
                   onClick={() => router.push('/booking/expenses')}
-                  className="px-6 py-2.5 border border-gray-300 rounded-xl text-gray-700 hover:bg-gray-50 transition-all duration-200"
+                  className="px-6 py-2.5 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-all duration-200"
                 >
                   ← Edit Expenses
                 </button>
@@ -437,7 +420,7 @@ export default function CalculationPage() {
                 <button
                   onClick={handleCalculate}
                   disabled={saving}
-                  className="px-6 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-xl hover:from-blue-700 hover:to-blue-800 transition-all duration-300 disabled:opacity-50 flex items-center"
+                  className="px-6 py-2.5 bg-emerald-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-300 disabled:opacity-50 flex items-center"
                 >
                   {saving ? (
                     <>
@@ -455,7 +438,7 @@ export default function CalculationPage() {
                 <button
                   onClick={handleComplete}
                   disabled={saving}
-                  className="px-6 py-2.5 bg-gradient-to-r from-emerald-600 to-green-700 text-white rounded-xl hover:from-emerald-700 hover:to-green-800 transition-all duration-300 disabled:opacity-50 flex items-center"
+                  className="px-6 py-2.5 bg-gradient-to-r from-emerald-600 to-green-700 text-white rounded-lg hover:from-emerald-700 hover:to-green-800 transition-all duration-300 disabled:opacity-50 flex items-center"
                 >
                   {saving ? (
                     <>
@@ -472,7 +455,7 @@ export default function CalculationPage() {
                 
                 <button
                   onClick={() => router.push('/')}
-                  className="px-6 py-2.5 bg-gradient-to-r from-gray-600 to-gray-700 text-white rounded-xl hover:from-gray-700 hover:to-gray-800 transition-all duration-300"
+                  className="px-6 py-2.5 bg-gradient-to-r from-gray-600 to-gray-700 text-white rounded-lg hover:from-gray-700 hover:to-gray-800 transition-all duration-300"
                 >
                   ← Back to Dashboard
                 </button>
@@ -481,6 +464,6 @@ export default function CalculationPage() {
           </motion.div>
         </div>
       </div>
-    </TravelBackground>
+    </div>
   );
 }

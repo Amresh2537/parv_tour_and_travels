@@ -1,0 +1,12 @@
+ ⨯ Failed to start server
+C:\Users\user\GitHub\parv_tour_and_travels\node_modules\next\dist\server\lib\start-server.js: Invalid source map. Only conformant source maps can be used to find the original code. Cause: Error: sourceMapURL could not be parsed
+C:\Users\user\GitHub\parv_tour_and_travels\node_modules\next\dist\trace\trace.js: Invalid source map. Only conformant source maps can be used to find the original code. Cause: Error: sourceMapURL could not be parsed
+Error: listen EADDRINUSE: address already in use :::3000
+    at <unknown> (Error: listen EADDRINUSE: address already in use :::3000)
+    at new Promise (<anonymous>) {
+  code: 'EADDRINUSE',
+  errno: -4091,
+  syscall: 'listen',
+  address: '::',
+  port: 3000
+}

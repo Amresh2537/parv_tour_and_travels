@@ -1,10 +1,8 @@
-import { Inter } from 'next/font/google';
 import './globals.css';
 import Layout from '@/components/Layout';
 import BackgroundImageWrapper from '@/components/TravelBackground';
 import InstallPrompt from '@/components/InstallPrompt';
 
-const inter = Inter({ subsets: ['latin'] });
 
 // ✅ 1. SEPARATE VIEWPORT EXPORT (for themeColor and viewport settings)
 export const viewport = {
@@ -57,7 +55,7 @@ export default function RootLayout({ children }) {
         <link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-192x192.png" />
         <link rel="apple-touch-icon" sizes="167x167" href="/icons/icon-152x152.png" />
       </head>
-      <body className={`${inter.className} h-full`}>
+      <body className="h-full">
         <BackgroundImageWrapper>
           <div className="min-h-full">
             <Layout>{children}</Layout>
