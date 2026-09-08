@@ -91,7 +91,7 @@ export default function BookingSummaryPage() {
         <div className="mb-8">
           <div className="flex flex-col md:flex-row md:items-center justify-between mb-6">
             <div>
-              <h1 className="text-3xl font-bold text-gray-800">Booking Summary</h1>
+              <a className="secondary-button report-controls" href={`/booking/report/${bookingId}`}>Customer / Company Reports</a><h1 className="text-3xl font-bold text-gray-800">Booking Summary</h1>
               <p className="text-gray-600 mt-2">
                 Booking ID: <span className="font-mono font-medium text-blue-600">{bookingId}</span>
               </p>
@@ -242,7 +242,7 @@ export default function BookingSummaryPage() {
               <div className="space-y-3">
                 <div>
                   <p className="text-sm text-gray-600">Booking Amount</p>
-                  <p className="text-lg font-bold text-green-600">{formatCurrency(booking.bookingAmount)}</p>
+                  <p className="text-lg font-bold text-green-600">{formatCurrency(booking.totalRevenue ?? booking.bookingAmount)}</p>
                 </div>
                 <div>
                   <p className="text-sm text-gray-600">Advance Paid</p>

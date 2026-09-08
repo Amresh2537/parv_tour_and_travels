@@ -1,6 +1,9 @@
 'use client';
 
-import { expenseTotals } from '@/lib/expenses';
+import { bookingTotals, DEFAULT_SETTINGS } from '@/lib/expenses';
+import TollFields from '@/components/TollFields';
+import FuelFields from '@/components/FuelFields';
+import FuelComparison from '@/components/FuelComparison';
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { bookingApi, formatCurrency, formatDate } from '@/lib/api';
@@ -162,6 +165,8 @@ export default function EditBookingPage() {
         }
         
         setFormData({
+          ...DEFAULT_SETTINGS,
+          ...booking,
           // Booking Details
           bookingId: booking.bookingId || bookingId,
           date: bookingDate,
@@ -185,8 +190,8 @@ export default function EditBookingPage() {
           // Driver Details
           driverName: booking.driverName || '',
           driverPhone: booking.driverPhone || '',
-          startKM: booking.startKM || '',
-          endKM: booking.endKM || '',
+          startKM: booking.startKM ?? '',
+          endKM: booking.endKM ?? '',
           totalKM: booking.totalKM || '',
           
           // Fuel Details
@@ -326,15 +331,15 @@ export default function EditBookingPage() {
       const toll = parseFloat(updated.toll) || 0;
       const driverPayment = parseFloat(updated.driverPayment) || 0;
       const otherExpenses = parseFloat(updated.otherExpenses) || 0;
-      updated.totalExpenses = expenseTotals(updated).totalExpenses.toFixed(2);
+      Object.assign(updated, bookingTotals(updated));
       
       // Recalculate profit and outstanding
       const bookingAmount = parseFloat(updated.bookingAmount) || 0;
       const advance = parseFloat(updated.advance) || 0;
       const totalExp = parseFloat(updated.totalExpenses) || 0;
       
-      updated.netProfit = (bookingAmount - totalExp).toFixed(2);
-      updated.outstanding = (bookingAmount - advance).toFixed(2);
+      updated.netProfit = bookingTotals(updated).netProfit;
+      updated.outstanding = bookingTotals(updated).outstanding;
       
       return updated;
     });
@@ -388,7 +393,17 @@ export default function EditBookingPage() {
         liters: formData.liters,
         fuelCost: formData.fuelCost,
         toll: formData.toll,
+        tollCalculationVersion: formData.tollCalculationVersion,
+        tollTripCost: formData.tollTripCost,
+        tollTrips: formData.tollTrips,
         fuelPaidBy: formData.fuelPaidBy,
+        fuelCalculationVersion: formData.fuelCalculationVersion,
+        fuelBillingMode: formData.fuelBillingMode,
+        customerAverage: formData.customerAverage,
+        customerAcAverage: formData.customerAcAverage,
+        acEnabled: formData.acEnabled,
+        distanceMode: formData.distanceMode,
+        tripDistance: formData.tripDistance,
         tollPaidBy: formData.tollPaidBy,
         driverPayment: formData.driverPayment,
         otherExpenses: formData.otherExpenses,
@@ -522,11 +537,17 @@ export default function EditBookingPage() {
         </div>
         
         {/* Form */}
-        <form noValidate onSubmit={handleSubmit} className="bg-white rounded-xl shadow-lg p-6">
+        <form noValidate onSubmit={handleSubmit} className="workspace">
+          <TollFields data={formData} onChange={data => setFormData({ ...data, ...bookingTotals(data) })} /><section className="section"><h2>Customer & Self Fuel</h2>
+            <FuelFields data={formData} onChange={data => setFormData({ ...data, ...bookingTotals(data) })} />
+            <div className="form-grid mt-5"><label>Distance Entry<select value={formData.distanceMode || 'odometer'} name="distanceMode" onChange={handleChange}><option value="odometer">Odometer readings</option><option value="manual">Enter total km</option></select></label>
+              {formData.distanceMode === 'manual' && <label>Total Distance (km)<input type="number" step="any" name="tripDistance" value={formData.tripDistance ?? ''} onChange={handleChange} /></label>}
+            </div><FuelComparison data={formData} />
+          </section>
           <div className="grid sm:grid-cols-2 gap-4 mb-6">
             {['fuel', 'toll'].map(kind => <label key={kind} className="text-sm font-medium">{kind === 'fuel' ? 'Oil / Fuel Paid By' : 'Toll Tax Paid By'}
               <select name={kind + 'PaidBy'} value={formData[kind + 'PaidBy'] || 'company'} onChange={handleChange} className="mt-2 w-full border border-gray-300 rounded-lg p-3">
-                <option value="company">Company</option><option value="customer">Customer</option>
+                <option value="company">Self / Company</option><option value="customer">Customer</option>
               </select>
             </label>)}
           </div>

@@ -1,6 +1,6 @@
 export const runtime = 'nodejs';
 
-import { expenseTotals } from '@/lib/expenses';
+import { bookingTotals, DEFAULT_SETTINGS } from '@/lib/expenses';
 import { getDb } from '@/lib/mongodb';
 
 async function getBookingsCollection() {
@@ -50,7 +50,7 @@ async function computeStats() {
         ])
         .toArray(),
       bookingsCol
-        .aggregate([{ $group: { _id: null, total: { $sum: { $toDouble: '$bookingAmount' } } } }])
+        .aggregate([{ $group: { _id: null, total: { $sum: { $convert: { input: { $ifNull: ['$totalRevenue', '$bookingAmount'] }, to: 'double', onError: 0, onNull: 0 } } } } }])
         .toArray(),
       bookingsCol
         .aggregate([{ $group: { _id: null, total: { $sum: { $toDouble: '$netProfit' } } } }])
@@ -77,6 +77,12 @@ export async function GET(request) {
     const { searchParams } = new URL(request.url);
     const action = searchParams.get('action') || 'getAll';
     const bookingId = searchParams.get('bookingId') || searchParams.get('id');
+
+    if (action === 'getSettings') {
+      const db = await getDb();
+      const settings = await db.collection('settings').findOne({ key: 'fuel' });
+      return Response.json(createSuccess({ ...DEFAULT_SETTINGS, ...(settings?.values || {}) }));
+    }
 
     if (action === 'ping') {
       return Response.json(createSuccess({ message: 'MongoDB API online' }));
@@ -209,109 +215,37 @@ async function updateBookingStatus(bookingId, status, reason) {
     return createError('Booking not found');
   }
 
+  if (status === 'completed' || status === 'cancelled') {
+    const drivers = await getDriversCollection();
+    const vehicles = await getVehiclesCollection();
+    await drivers.updateMany({ assignedBookingId: bookingId }, { $set: { status: 'Available', assignedVehicle: '', assignedBookingId: '' } });
+    await vehicles.updateMany({ assignedBookingId: bookingId }, { $set: { status: 'Available', assignedDriver: '', assignedBookingId: '' } });
+  }
+
   return createSuccess(result);
 }
 
+const expenseFields = ['vehicleAverage', 'customerAverage', 'customerAcAverage', 'acEnabled', 'fuelCalculationVersion',
+  'fuelBillingMode', 'distanceMode', 'tripDistance', 'fuelPaidBy', 'tollPaidBy', 'startKM', 'endKM',
+  'tollCalculationVersion', 'tollTripCost', 'tollTrips', 'fuelRate', 'liters', 'fuelCost', 'toll', 'driverPayment', 'otherExpenses', 'maintenance', 'food', 'parking'];
+
 async function applyExpenses(bookingId, payload) {
-  const bookingsCol = await getBookingsCollection();
-
-  const fuelCost = Number(payload.fuelCost) || 0;
-  const toll = Number(payload.toll) || 0;
-  const driverPayment = Number(payload.driverPayment) || 0;
-  const otherExpenses = Number(payload.otherExpenses) || 0;
-  const maintenance = Number(payload.maintenance) || 0;
-  const food = Number(payload.food) || 0;
-  const parking = Number(payload.parking) || 0;
-
-  const totalExpenses = expenseTotals(payload).totalExpenses;
-
-  const booking = await bookingsCol.findOne({ bookingId });
-  if (!booking) {
-    return createError('Booking not found');
-  }
-
-  const bookingAmount = Number(booking.bookingAmount) || 0;
-  const advance = Number(booking.advance) || 0;
-
-  const netProfit = bookingAmount - totalExpenses;
-  const outstanding = bookingAmount - advance;
-
-  const update = {
-    $set: {
-      vehicleAverage: payload.vehicleAverage,
-      fuelPaidBy: payload.fuelPaidBy || 'company',
-      tollPaidBy: payload.tollPaidBy || 'company',
-      startKM: payload.startKM,
-      endKM: payload.endKM,
-      distance: payload.distance,
-      fuelRate: payload.fuelRate,
-      liters: payload.liters,
-      fuelCost,
-      toll,
-      driverPayment,
-      otherExpenses,
-      maintenance,
-      food,
-      parking,
-      totalExpenses,
-      netProfit,
-      outstanding,
-      updatedAt: new Date(),
-    },
-  };
-
-  await bookingsCol.updateOne({ bookingId }, update);
-
-  return createSuccess({
-    bookingId,
-    totalExpenses,
-    netProfit,
-    outstanding,
-  });
+  const col = await getBookingsCollection();
+  const booking = await col.findOne({ bookingId });
+  if (!booking) return createError('Booking not found');
+  const changes = Object.fromEntries(expenseFields.filter(key => payload[key] !== undefined).map(key => [key, payload[key]]));
+  const totals = bookingTotals({ ...booking, ...changes });
+  await col.updateOne({ bookingId }, { $set: { ...changes, ...totals, updatedAt: new Date() } });
+  return createSuccess({ bookingId, ...totals });
 }
 
 async function recalculateProfit(bookingId) {
-  const bookingsCol = await getBookingsCollection();
-  const booking = await bookingsCol.findOne({ bookingId });
-
-  if (!booking) {
-    return createError('Booking not found');
-  }
-
-  const bookingAmount = Number(booking.bookingAmount) || 0;
-  const advance = Number(booking.advance) || 0;
-
-  const fuelCost = Number(booking.fuelCost) || 0;
-  const toll = Number(booking.toll) || 0;
-  const driverPayment = Number(booking.driverPayment) || 0;
-  const otherExpenses = Number(booking.otherExpenses) || 0;
-  const maintenance = Number(booking.maintenance) || 0;
-  const food = Number(booking.food) || 0;
-  const parking = Number(booking.parking) || 0;
-
-  const totalExpenses = expenseTotals(booking).totalExpenses;
-
-  const netProfit = bookingAmount - totalExpenses;
-  const outstanding = bookingAmount - advance;
-
-  await bookingsCol.updateOne(
-    { bookingId },
-    {
-      $set: {
-        totalExpenses,
-        netProfit,
-        outstanding,
-        updatedAt: new Date(),
-      },
-    },
-  );
-
-  return createSuccess({
-    bookingId,
-    totalExpenses,
-    netProfit,
-    outstanding,
-  });
+  const col = await getBookingsCollection();
+  const booking = await col.findOne({ bookingId });
+  if (!booking) return createError('Booking not found');
+  const totals = bookingTotals(booking);
+  await col.updateOne({ bookingId }, { $set: { ...totals, updatedAt: new Date() } });
+  return createSuccess({ bookingId, ...totals });
 }
 
 export async function POST(request) {
@@ -323,6 +257,18 @@ export async function POST(request) {
       return Response.json(createError('action is required'), { status: 400 });
     }
 
+    if (action === 'saveSettings') {
+      const values = {};
+      for (const key of Object.keys(DEFAULT_SETTINGS)) {
+        const value = Number(payload[key]);
+        if (!Number.isFinite(value) || value <= 0) return Response.json(createError('Settings must be positive numbers'), { status: 400 });
+        values[key] = value;
+      }
+      const db = await getDb();
+      await db.collection('settings').updateOne({ key: 'fuel' }, { $set: { values, updatedAt: new Date() } }, { upsert: true });
+      return Response.json(createSuccess(values));
+    }
+
     if (action === 'create') {
       const bookingsCol = await getBookingsCollection();
       const now = new Date();
@@ -330,19 +276,31 @@ export async function POST(request) {
 
       const doc = {
         bookingId,
+        fuelCalculationVersion: payload.fuelCalculationVersion || 1,
+        fuelBillingMode: payload.fuelBillingMode || 'included',
+        customerAverage: payload.customerAverage ?? DEFAULT_SETTINGS.customerAverage,
+        customerAcAverage: payload.customerAcAverage ?? DEFAULT_SETTINGS.customerAcAverage,
+        fuelRate: payload.fuelRate ?? DEFAULT_SETTINGS.fuelRate,
+        acEnabled: payload.acEnabled === true,
         driverName: payload.driverName || '',
         driverPhone: payload.driverPhone || '',
         fuelPaidBy: payload.fuelPaidBy || 'company',
         tollPaidBy: payload.tollPaidBy || 'company',
+        tollCalculationVersion: payload.tollCalculationVersion || 1,
+        tollTripCost: payload.tollTripCost ?? 15,
+        tollTrips: payload.tollTrips ?? 0,
+        toll: payload.toll ?? 0,
         customerName: payload.customerName || '',
         phone: payload.phone || '',
         from: payload.from || '',
         to: payload.to || '',
+        vehicleId: payload.vehicleId || '',
+        driverId: payload.driverId || '',
         vehicle: payload.vehicle || '',
-        vehicleAverage: payload.vehicleAverage || '12',
+        vehicleAverage: payload.vehicleAverage || DEFAULT_SETTINGS.vehicleAverage,
         bookingAmount: payload.bookingAmount || '0',
         advance: payload.advance || '0',
-        passengers: payload.passengers || '',
+        passengers: payload.passengers || 4,
         tripType: payload.tripType || 'one-way',
         bookingDate: payload.bookingDate || now.toISOString(),
         notes: payload.notes || '',
@@ -358,6 +316,7 @@ export async function POST(request) {
         ],
       };
 
+      Object.assign(doc, bookingTotals(doc));
       await bookingsCol.insertOne(doc);
 
       return Response.json(createSuccess({ bookingId }));
@@ -374,10 +333,8 @@ export async function POST(request) {
       const existing = await bookingsCol.findOne({ bookingId });
       if (!existing) return Response.json(createError('Booking not found'), { status: 404 });
       const merged = { ...existing, ...payload };
-      const totals = expenseTotals(merged);
-      const updatePayload = { ...payload, totalExpenses: totals.totalExpenses,
-        netProfit: (Number(merged.bookingAmount) || 0) - totals.totalExpenses,
-        outstanding: (Number(merged.bookingAmount) || 0) - (Number(merged.advance) || 0) };
+      const totals = bookingTotals(merged);
+      const updatePayload = { ...payload, ...totals };
       delete updatePayload.bookingId;
       delete updatePayload._id;
 
@@ -444,7 +401,10 @@ export async function POST(request) {
           driverPhone: payload.driverPhone || '',
           vehicleId: payload.vehicleId || '',
           vehicleType: payload.vehicleType || '',
-          vehicleAverage: payload.vehicleAverage || '12',
+          ...(payload.vehicle !== undefined ? { vehicle: payload.vehicle } : {}),
+          ...(payload.customerAverage !== undefined ? { customerAverage: payload.customerAverage } : {}),
+          ...(payload.customerAcAverage !== undefined ? { customerAcAverage: payload.customerAcAverage } : {}),
+          vehicleAverage: payload.vehicleAverage ?? '',
           startKM: payload.startKM || '',
           updatedAt: new Date(),
         },
@@ -457,6 +417,14 @@ export async function POST(request) {
 
       // Also mark status as driver_assigned
       await updateBookingStatus(bookingId, 'driver_assigned', 'Driver assigned');
+      if (payload.driverId) {
+        const drivers = await getDriversCollection();
+        await drivers.updateOne({ driverId: payload.driverId }, { $set: { status: 'On Trip', assignedVehicle: payload.vehicleId || '', assignedBookingId: bookingId } });
+      }
+      if (payload.vehicleId) {
+        const vehicles = await getVehiclesCollection();
+        await vehicles.updateOne({ vehicleId: payload.vehicleId }, { $set: { status: 'On Trip', assignedDriver: payload.driverId || '', assignedBookingId: bookingId } });
+      }
 
       return Response.json(createSuccess({ bookingId }));
     }
