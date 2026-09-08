@@ -1,681 +1,74 @@
 'use client';
-
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { ArrowRight } from 'lucide-react';
 import { bookingApi } from '@/lib/api';
-import { motion } from 'framer-motion';
-import DatePicker from 'react-datepicker';
-import 'react-datepicker/dist/react-datepicker.css';
+import { DEFAULT_SETTINGS } from '@/lib/expenses';
+import FuelFields from '@/components/FuelFields';
 
+const initial = { customerName: '', phone: '', from: '', to: '', vehicle: '', vehicleId: '', driverName: '', driverPhone: '', bookingAmount: '', advance: '', passengers: 4, tollCalculationVersion: 2, tollTripCost: 15, tollTrips: 0, tripType: 'one-way', bookingDate: '', notes: '', fuelCalculationVersion: 2, fuelBillingMode: 'separate', fuelPaidBy: 'company', tollPaidBy: 'company', acEnabled: false };
 export default function BookingEntryPage() {
   const router = useRouter();
-  const [loading, setLoading] = useState(false);
-  const [loadingVehicles, setLoadingVehicles] = useState(true);
-  const [availableVehicles, setAvailableVehicles] = useState([]);
-  const [loadingDrivers, setLoadingDrivers] = useState(true);
-  const [availableDrivers, setAvailableDrivers] = useState([]);
-  const [formData, setFormData] = useState({
-    customerName: '',
-    phone: '',
-    from: '',
-    to: '',
-    vehicle: '',
-    fuelPaidBy: 'company',
-    tollPaidBy: 'company',
-    driverName: '',
-    driverPhone: '',
-    bookingAmount: '',
-    advance: '',
-    passengers: '',
-    tripType: 'one-way',
-    bookingDate: new Date(),
-    notes: ''
-  });
-
-  // Load available vehicles on component mount
+  const [data, setData] = useState({ ...initial, ...DEFAULT_SETTINGS });
+  const [vehicles, setVehicles] = useState([]);
+  const [drivers, setDrivers] = useState([]);
+  const [defaults, setDefaults] = useState(DEFAULT_SETTINGS);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
   useEffect(() => {
-    loadAvailableVehicles();
-  }, []);
-
-  const loadAvailableVehicles = async () => {
-    try {
-      setLoadingVehicles(true);
-      setLoadingDrivers(true);
-      const [vehiclesRes, driversRes] = await Promise.all([
-        bookingApi.getAvailableVehicles(),
-        bookingApi.getDrivers()
-      ]);
-      
-      if (vehiclesRes.success && Array.isArray(vehiclesRes.data) && vehiclesRes.data.length > 0) {
-        // Normalize vehicle objects coming from MongoDB so the
-        // booking form always works with a consistent shape.
-        const normalized = vehiclesRes.data.map((v, index) => ({
-          id: v.vehicleId || v.id || v._id || `vehicle-${index}`,
-          name: v.name || v.type || 'Vehicle',
-          type: v.type || v.name || '',
-          capacity: v.capacity || 4,
-          average: v.average || 12,
-        }));
-
-        setAvailableVehicles(normalized);
-        
-        // Set default vehicle to first available vehicle
-        if (!formData.vehicle && normalized.length > 0) {
-          setFormData(prev => ({
-            ...prev,
-            vehicle: normalized[0].name
-          }));
-        }
-      } else {
-        // Fallback to default vehicles if API fails
-        const defaultVehicles = [
-          { id: 'V001', name: 'Innova', type: 'SUV', capacity: 7, average: 12 },
-          { id: 'V002', name: 'Swift', type: 'Sedan', capacity: 4, average: 18 },
-          { id: 'V003', name: 'Ertiga', type: 'MPV', capacity: 7, average: 15 },
-          { id: 'V004', name: 'Scorpio', type: 'SUV', capacity: 7, average: 10 },
-          { id: 'V005', name: 'XUV700', type: 'SUV', capacity: 7, average: 11 },
-          { id: 'V006', name: 'Fortuner', type: 'SUV', capacity: 7, average: 9 },
-          { id: 'V007', name: 'Crysta', type: 'SUV', capacity: 7, average: 10 },
-          { id: 'V008', name: 'Tempo', type: 'Van', capacity: 12, average: 8 },
-          { id: 'V009', name: 'Bus', type: 'Bus', capacity: 40, average: 4 }
-        ];
-        setAvailableVehicles(defaultVehicles);
-        setFormData(prev => ({ ...prev, vehicle: 'Innova' }));
-      }
-
-      // Normalize and load drivers (for optional assignment on entry)
-      if (driversRes.success && Array.isArray(driversRes.data)) {
-        const drivers = driversRes.data
-          .filter(d => d.status === 'Available' || !d.status)
-          .map((d, index) => ({
-            driverId: d.driverId || d.id || d._id || `driver-${index}`,
-            name: d.name || 'Driver',
-            phone: d.phone || d.driverPhone || '',
-            experience: d.experience || '',
-            status: d.status || 'Available'
-          }));
-        setAvailableDrivers(drivers);
-      } else {
-        setAvailableDrivers([]);
-      }
-    } catch (error) {
-      console.error('Error loading vehicles:', error);
-      // Fallback vehicles
-      const fallbackVehicles = [
-        'Innova', 'Swift', 'Ertiga', 'Scorpio', 'XUV700', 
-        'Fortuner', 'Crysta', 'Tempo', 'Bus'
-      ];
-      setFormData(prev => ({ ...prev, vehicle: 'Innova' }));
-    } finally {
-      setLoadingVehicles(false);
-      setLoadingDrivers(false);
-    }
-  };
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-
-    // When driver changes, also auto-fill phone
-    if (name === 'driverName') {
-      const selected = availableDrivers.find(d => d.name === value);
-      setFormData(prev => ({
-        ...prev,
-        driverName: value,
-        driverPhone: selected?.phone || prev.driverPhone
-      }));
-      return;
-    }
-
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-  };
-
-  const handleDateChange = (date) => {
-    setFormData(prev => ({
-      ...prev,
-      bookingDate: date
-    }));
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setLoading(true);
-
-    try {
-      // Format date for API
-      const submitData = {
-        ...formData,
-        bookingDate: formData.bookingDate?.toISOString() || '',
-        vehicleAverage: getVehicleAverage(formData.vehicle)
-      };
-
-      const result = await bookingApi.create(submitData);
-      
-      if (result.success) {
-        const bookingId = result.data?.bookingId || result.bookingId;
-
-        // If a driver was pre-selected, attach to booking immediately
-        if (formData.driverName) {
-          const selectedDriver = availableDrivers.find(d => d.name === formData.driverName);
-          const selectedVehicle = availableVehicles.find(v => v.name === formData.vehicle);
-
-          try {
-            await bookingApi.addDriver({
-              bookingId,
-              driverId: selectedDriver?.driverId,
-              driverName: formData.driverName,
-              driverPhone: formData.driverPhone,
-              vehicleId: selectedVehicle?.id,
-              vehicleType: selectedVehicle?.type,
-              vehicleAverage: getVehicleAverage(formData.vehicle)
-            });
-          } catch (driverErr) {
-            console.error('Error attaching driver to booking:', driverErr);
-          }
-        }
-        
-        ['driverData', 'expensesData', 'calculations'].forEach(key => localStorage.removeItem(key));
-        localStorage.setItem('currentBookingId', bookingId);
-        localStorage.setItem('lastBooking', JSON.stringify({
-          ...submitData,
-          bookingId: bookingId,
-          bookingDate: formData.bookingDate?.toISOString() || '',
-          status: 'pending'
-        }));
-        
-        showNotification(`Booking created successfully! ID: ${bookingId}`, 'success');
-        router.push('/booking/confirm');
-      } else {
-        showNotification(result.error || 'Failed to create booking', 'error');
-      }
-    } catch (error) {
-      console.error('Error:', error);
-      showNotification('Error creating booking. Please try again.', 'error');
-    } finally {
+    Promise.all([bookingApi.getVehicles(), bookingApi.getDrivers(), bookingApi.getSettings()]).then(([v, d, s]) => {
+      const settings = s.success ? s.data : DEFAULT_SETTINGS;
+      setDefaults(settings); setData(prev => ({ ...prev, ...settings }));
+      setVehicles(v.success ? v.data : []); setDrivers(d.success ? d.data : []);
+      if (!v.success || !d.success || !s.success) setError('Some admin data could not be loaded. You can still enter booking details.');
       setLoading(false);
-    }
+    });
+  }, []);
+  const change = e => {
+    const { name, value } = e.target;
+    setData(prev => {
+      if (name === 'vehicleId') {
+        const vehicle = vehicles.find(v => v.vehicleId === value);
+        return { ...prev, vehicleId: value, vehicle: vehicle?.type || vehicle?.name || '', vehicleAverage: vehicle?.average ?? defaults.vehicleAverage, customerAverage: vehicle?.customerAverage ?? defaults.customerAverage, customerAcAverage: vehicle?.customerAcAverage ?? defaults.customerAcAverage };
+      }
+      const driver = name === 'driverName' ? drivers.find(d => d.name === value) : null;
+      return { ...prev, [name]: value, ...(name === 'driverName' ? { driverId: driver?.driverId || '', driverPhone: driver?.phone || prev.driverPhone } : {}) };
+    });
   };
-
-  const getVehicleAverage = (vehicleName) => {
-    const vehicle = availableVehicles.find(v => v.name === vehicleName);
-    return vehicle ? vehicle.average : '12';
+  const save = async e => {
+    e.preventDefault(); setSaving(true); setError('');
+    const result = await bookingApi.create(data);
+    setSaving(false);
+    if (!result.success) { setError(result.error || 'Unable to create booking'); return; }
+    const bookingId = result.data?.bookingId || result.bookingId;
+    ['driverData', 'expensesData', 'calculations'].forEach(key => localStorage.removeItem(key));
+    localStorage.setItem('currentBookingId', bookingId);
+    localStorage.setItem('lastBooking', JSON.stringify({ ...data, bookingId }));
+    router.push('/booking/confirm');
   };
-
-  const getVehicleCapacity = (vehicleName) => {
-    const vehicle = availableVehicles.find(v => v.name === vehicleName);
-    return vehicle ? vehicle.capacity : 4;
-  };
-
-  const showNotification = (message, type = 'success') => {
-    const notification = document.createElement('div');
-    notification.className = `fixed top-4 right-4 z-50 px-4 py-3 rounded-lg shadow-lg transform transition-all duration-300 ${
-      type === 'success' ? 'bg-emerald-500 text-white' : 
-      type === 'error' ? 'bg-rose-500 text-white' : 
-      'bg-amber-500 text-white'
-    }`;
-    notification.innerHTML = `
-      <div class="flex items-center">
-        <span class="mr-2">${type === 'success' ? '✓' : '✗'}</span>
-        <span>${message}</span>
-      </div>
-    `;
-    
-    document.body.appendChild(notification);
-    
-    setTimeout(() => {
-      notification.style.opacity = '0';
-      notification.style.transform = 'translateX(100%)';
-      setTimeout(() => notification.remove(), 300);
-    }, 3000);
-  };
-
-  return (
-    <div className="booking-workspace bg-gray-50 text-gray-900">
-      <div className="min-h-screen p-4 md:p-8 flex items-center justify-center">
-        <div className="max-w-4xl w-full">
-          <div className="backdrop-blur-lg bg-white/90 rounded-lg overflow-hidden border border-white/20">
-            {/* Header */}
-            <div className="bg-emerald-700 p-6 md:p-8">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h1 className="text-2xl md:text-3xl font-bold text-white">New Booking Entry</h1>
-                  <p className="text-blue-100 mt-2">Create a new travel booking for your customer</p>
-                </div>
-                <div className="hidden md:block p-3 bg-white/10 rounded-lg">
-                  <span className="text-white font-semibold">📋 Booking Form</span>
-                </div>
-              </div>
-            </div>
-
-            <form noValidate onSubmit={handleSubmit} className="p-6 md:p-8">
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {/* Customer Details */}
-                <motion.div 
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="space-y-4"
-                >
-                  <div className="bg-white py-4 border-b border-gray-200">
-                    <h3 className="text-lg font-semibold text-blue-800 mb-4 flex items-center">
-                      <span className="mr-2">👤</span>
-                      Customer Details
-                    </h3>
-                    <div className="space-y-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Full Name
-                        </label>
-                        <input
-                          type="text"
-                          name="customerName"
-                          value={formData.customerName}
-                          onChange={handleChange}
-
-                          className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white/70 backdrop-blur-sm transition-all"
-                          placeholder="Enter customer name"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Phone Number
-                        </label>
-                        <input
-                          type="tel"
-                          name="phone"
-                          value={formData.phone}
-                          onChange={handleChange}
-
-                          pattern="[0-9]{10}"
-                          className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white/70 backdrop-blur-sm"
-                          placeholder="9876543210"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </motion.div>
-
-                {/* Journey Details */}
-                <motion.div 
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.1 }}
-                  className="space-y-4"
-                >
-                  <div className="bg-white py-4 border-b border-gray-200">
-                    <h3 className="text-lg font-semibold text-emerald-800 mb-4 flex items-center">
-                      <span className="mr-2">📍</span>
-                      Journey Details
-                    </h3>
-                    <div className="space-y-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          From
-                        </label>
-                        <input
-                          type="text"
-                          name="from"
-                          value={formData.from}
-                          onChange={handleChange}
-
-                          className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-white/70 backdrop-blur-sm"
-                          placeholder="Starting location"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          To
-                        </label>
-                        <input
-                          type="text"
-                          name="to"
-                          value={formData.to}
-                          onChange={handleChange}
-
-                          className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-white/70 backdrop-blur-sm"
-                          placeholder="Destination"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </motion.div>
-
-                {/* Vehicle & Travel Details */}
-                <motion.div 
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.2 }}
-                  className="space-y-4"
-                >
-                  <div className="bg-white py-4 border-b border-gray-200">
-                    <h3 className="text-lg font-semibold text-purple-800 mb-4 flex items-center">
-                      <span className="mr-2">🚗</span>
-                      Travel Details
-                    </h3>
-                    <div className="space-y-4">
-                      {/* Booking Date */}
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Booking Date
-                        </label>
-                        <div className="relative">
-                          <DatePicker
-                            selected={formData.bookingDate}
-                            onChange={handleDateChange}
-                            dateFormat="dd/MM/yyyy"
-                            className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white/70 backdrop-blur-sm"
-                            placeholderText="Select booking date"
-                          />
-                          <div className="absolute right-3 top-3 text-gray-400">
-                            📅
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Dynamic Vehicle Selection */}
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Vehicle
-                        </label>
-                        <div className="relative">
-                          {loadingVehicles ? (
-                            <div className="w-full px-4 py-3 border border-gray-200 rounded-lg bg-white/70">
-                              <div className="flex items-center">
-                                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-600 mr-2"></div>
-                                <span className="text-gray-500">Loading vehicles...</span>
-                              </div>
-                            </div>
-                          ) : (
-                            <select
-                              name="vehicle"
-                              value={formData.vehicle}
-                              onChange={handleChange}
-
-                              className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 bg-white/70 backdrop-blur-sm appearance-none"
-                            >
-                              <option value="">Select Vehicle</option>
-                              {availableVehicles.map((vehicle, index) => (
-                                <option 
-                                  key={vehicle.id || vehicle.name || `${vehicle.name}-${index}`}
-                                  value={vehicle.name}
-                                  className="py-2"
-                                >
-                                  {vehicle.name} 
-                                  {vehicle.type && ` (${vehicle.type})`}
-                                  {vehicle.capacity && ` - ${vehicle.capacity} seats`}
-                                </option>
-                              ))}
-                            </select>
-                          )}
-                          <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-gray-400">
-                            ▼
-                          </div>
-                        </div>
-                        {formData.vehicle && (
-                          <div className="mt-2 text-xs text-gray-600">
-                            {(() => {
-                              const vehicle = availableVehicles.find(v => v.name === formData.vehicle);
-                              if (vehicle) {
-                                return (
-                                  <>
-                                    <span className="inline-block px-2 py-1 bg-purple-100 text-purple-800 rounded mr-2">
-                                      {vehicle.capacity || 4} seats
-                                    </span>
-                                    <span className="inline-block px-2 py-1 bg-blue-100 text-blue-800 rounded">
-                                      Avg: {vehicle.average || 12} km/L
-                                    </span>
-                                  </>
-                                );
-                              }
-                              return null;
-                            })()}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </motion.div>
-
-                {/* Additional Travel Details */}
-                <motion.div 
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.3 }}
-                  className="md:col-span-2 lg:col-span-3"
-                >
-                  <div className="bg-white py-4 border-b border-gray-200">
-                    <h3 className="text-lg font-semibold text-indigo-800 mb-4 flex items-center">
-                      <span className="mr-2">📊</span>
-                      Additional Details
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Passengers
-                        </label>
-                        <input
-                          type="number"
-                          name="passengers"
-                          value={formData.passengers}
-                          onChange={handleChange}
-                          min="1"
-                          max={getVehicleCapacity(formData.vehicle)}
-                          className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white/70 backdrop-blur-sm"
-                          placeholder={`Max: ${getVehicleCapacity(formData.vehicle)}`}
-                        />
-                        <p className="text-xs text-gray-500 mt-1">
-                          Vehicle capacity: {getVehicleCapacity(formData.vehicle)} seats
-                        </p>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Trip Type
-                        </label>
-                        <select
-                          name="tripType"
-                          value={formData.tripType}
-                          onChange={handleChange}
-                          className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white/70 backdrop-blur-sm"
-                        >
-                          <option value="one-way">One Way</option>
-                          <option value="round-trip">Round Trip</option>
-                          <option value="multi-city">Multi City</option>
-                          <option value="hourly">Hourly Basis</option>
-                          <option value="daily">Daily Package</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Booking Time
-                        </label>
-                        <div className="px-4 py-3 bg-white/70 border border-gray-200 rounded-lg text-gray-700">
-                          {formData.bookingDate?.toLocaleTimeString([], {
-                            hour: '2-digit', 
-                            minute: '2-digit',
-                            hour12: true 
-                          })}
-                        </div>
-                      </div>
-
-                      {/* Optional Driver Selection (interconnected with drivers collection) */}
-                      <div className="md:col-span-3">
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Assign Driver (optional)
-                        </label>
-                        {loadingDrivers ? (
-                          <div className="w-full px-4 py-3 border border-gray-200 rounded-lg bg-white/70">
-                            <div className="flex items-center">
-                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-indigo-600 mr-2"></div>
-                              <span className="text-gray-500">Loading drivers...</span>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                            <input aria-label="Driver name" name="driverName" list="entry-drivers" value={formData.driverName} onChange={handleChange} placeholder="Driver name" className="w-full px-4 py-3 border border-gray-200 rounded-lg" />
-                            <datalist id="entry-drivers">{availableDrivers.map(driver => <option key={driver.driverId} value={driver.name} />)}</datalist>
-                            <input
-                              type="tel"
-                              name="driverPhone"
-                              value={formData.driverPhone}
-                              onChange={handleChange}
-                              placeholder="Driver phone"
-                              className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white/70 backdrop-blur-sm"
-                            />
-                            <div className="text-xs text-gray-500 flex items-center">
-                              <span className="mr-2">👨‍✈️</span>
-                              If you select a driver here, they will be linked to this booking and vehicle in the system.
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </motion.div>
-
-                <section className="md:col-span-2 lg:col-span-3 border-y border-gray-200 py-5 grid grid-cols-1 md:grid-cols-3 gap-5">
-                  <div><p className="text-sm text-gray-600">Fuel Average</p><p className="text-xl font-semibold text-emerald-700">{getVehicleAverage(formData.vehicle)} km/L</p></div>
-                  {['fuel', 'toll'].map(kind => <label key={kind} className="text-sm font-medium text-gray-700">
-                    {kind === 'fuel' ? 'Oil / Fuel Paid By' : 'Toll Tax Paid By'}
-                    <select name={kind + 'PaidBy'} value={formData[kind + 'PaidBy'] || 'company'} onChange={handleChange} className="mt-2 w-full border border-gray-300 rounded-lg px-3 py-3 bg-white">
-                      <option value="company">Company</option><option value="customer">Customer</option>
-                    </select>
-                  </label>)}
-                </section>
-                {/* Financial Details */}
-                <motion.div 
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.4 }}
-                  className="md:col-span-2 lg:col-span-3"
-                >
-                  <div className="bg-white py-6 border-b border-gray-200">
-                    <h3 className="text-lg font-semibold text-amber-800 mb-6 flex items-center">
-                      <span className="mr-2">💰</span>
-                      Financial Details
-                    </h3>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Total Amount (₹)
-                        </label>
-                        <input
-                          type="number"
-                          name="bookingAmount"
-                          value={formData.bookingAmount}
-                          onChange={handleChange}
-
-                          min="0"
-                          className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 bg-white/70 backdrop-blur-sm text-lg font-semibold"
-                          placeholder="5000"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Advance (₹)
-                        </label>
-                        <input
-                          type="number"
-                          name="advance"
-                          value={formData.advance}
-                          onChange={handleChange}
-                          min="0"
-                          className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 bg-white/70 backdrop-blur-sm"
-                          placeholder="2000"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Balance (₹)
-                        </label>
-                        <div className="px-4 py-3 bg-gray-50/70 backdrop-blur-sm border border-gray-200 rounded-lg text-lg font-semibold text-gray-800">
-                          ₹{((parseFloat(formData.bookingAmount) || 0) - (parseFloat(formData.advance) || 0)).toLocaleString('en-IN')}
-                        </div>
-                      </div>
-                    </div>
-                    
-                    {/* Additional Notes */}
-                    <div className="mt-6">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Additional Notes
-                      </label>
-                      <textarea
-                        name="notes"
-                        value={formData.notes}
-                        onChange={handleChange}
-                        rows="2"
-                        className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-amber-500 focus:border-amber-500 bg-white/70 backdrop-blur-sm"
-                        placeholder="Any special requirements, pickup time, or notes..."
-                      />
-                    </div>
-                  </div>
-                </motion.div>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex flex-col sm:flex-row justify-between items-center mt-8 pt-6 border-t border-gray-100">
-                <div className="mb-4 sm:mb-0">
-                  <button
-                    type="button"
-                    onClick={() => router.push('/')}
-                    className="px-6 py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-all duration-300 flex items-center"
-                  >
-                    <span className="mr-2">←</span>
-                    Back to Dashboard
-                  </button>
-                </div>
-                <div className="flex flex-wrap gap-3">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setFormData({
-                        customerName: '',
-                        phone: '',
-                        from: '',
-                        to: '',
-                        vehicle: availableVehicles.length > 0 ? availableVehicles[0].name : 'Innova',
-                        fuelPaidBy: 'company',
-    tollPaidBy: 'company',
-    driverName: '',
-                        driverPhone: '',
-                        bookingAmount: '',
-                        advance: '',
-                        passengers: '',
-                        tripType: 'one-way',
-                        bookingDate: new Date(),
-                        notes: ''
-                      });
-                    }}
-                    className="px-6 py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-all duration-300"
-                  >
-                    Clear All
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={loading || loadingVehicles}
-                    className="px-8 py-3 bg-emerald-700 text-white rounded-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-300 shadow-lg hover:shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
-                  >
-                    {loading ? (
-                      <>
-                        <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        Creating...
-                      </>
-                    ) : (
-                      <>
-                        <span className="mr-2">✓</span>
-                        Create Booking
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-            </form>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
+  return <div className="workspace">
+    <header className="page-heading"><div><p className="eyebrow">Bookings / New Entry</p><h1>New Booking</h1></div><Link href="/" className="secondary-button">Back to Bookings</Link></header>
+    {error && <p className="notice error" role="alert">{error}</p>}
+    {loading ? <p role="status" className="empty-state">Loading booking defaults...</p> : <form noValidate onSubmit={save}>
+      <section className="section"><h2>Customer & Journey</h2><div className="form-grid">
+        {[['customerName', 'Customer Name'], ['phone', 'Phone', 'tel'], ['from', 'Pickup Location'], ['to', 'Destination'], ['bookingDate', 'Departure Date', 'date'], ['passengers', 'Passengers', 'number']].map(([name, label, type]) => <label key={name}>{label}<input name={name} type={type || 'text'} value={data[name]} onChange={change} /></label>)}
+        <label>Trip Type<select name="tripType" value={data.tripType} onChange={change}>{[['one-way', 'One Way'], ['round-trip', 'Round Trip'], ['multi-city', 'Multi City'], ['hourly', 'Hourly'], ['daily', 'Daily']].map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
+      </div></section>
+      <section className="section"><h2>Vehicle & Driver</h2><div className="form-grid">
+        <label>Vehicle<select name="vehicleId" value={data.vehicleId} onChange={change}><option value="">Unassigned</option>{vehicles.filter(v => v.status === 'Available' || !v.status).map(v => <option key={v.vehicleId} value={v.vehicleId}>{v.type || v.name} {v.number ? ' / ' + v.number : ''}</option>)}</select></label>
+        <label>Driver Name<input name="driverName" list="booking-drivers" value={data.driverName} onChange={change} /><datalist id="booking-drivers">{drivers.filter(d => d.status === 'Available' || !d.status).map(d => <option key={d.driverId} value={d.name} />)}</datalist></label>
+        <label>Driver Phone<input name="driverPhone" type="tel" value={data.driverPhone} onChange={change} /></label>
+      </div><Link href="/admin" className="text-link">Manage vehicles & drivers</Link></section>
+      <section className="section"><h2>Fuel & Averages</h2><FuelFields data={data} onChange={setData} /></section>
+      <section className="section"><h2>Fare & Payment</h2><div className="form-grid">
+        <label>Booking Fare (INR)<input name="bookingAmount" type="number" step="any" value={data.bookingAmount} onChange={change} /></label>
+        <label>Advance (INR)<input name="advance" type="number" step="any" value={data.advance} onChange={change} /></label>
+        <label>Toll Paid By<select name="tollPaidBy" value={data.tollPaidBy} onChange={change}><option value="company">Self / Company</option><option value="customer">Customer</option></select></label>
+        <label className="full-width">Notes<textarea name="notes" value={data.notes} onChange={change} rows={3} /></label>
+      </div></section>
+      <footer className="form-actions"><button type="button" className="secondary-button" onClick={() => setData({ ...initial, ...defaults })}>Clear</button><button className="primary-button" disabled={saving}>{saving ? 'Creating...' : 'Create Booking'}<ArrowRight size={17} /></button></footer>
+    </form>}
+  </div>;
 }

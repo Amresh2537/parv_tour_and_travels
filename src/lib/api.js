@@ -60,6 +60,8 @@ export async function apiRequest(data = null, method = 'GET') {
   }
 }
 export const bookingApi = {
+  getSettings: () => apiRequest({ action: 'getSettings' }, 'GET'),
+  saveSettings: (data) => apiRequest({ action: 'saveSettings', ...data }, 'POST'),
   ping: () => apiRequest({ action: 'ping' }, 'GET'),
   getAll: () => apiRequest({ action: 'getAll' }, 'GET'),
   getById: (bookingId) => apiRequest({ action: 'getBooking', bookingId }, 'GET'),
@@ -241,7 +243,8 @@ export function formatCurrency(amount) {
   return new Intl.NumberFormat('en-IN', {
     style: 'currency',
     currency: 'INR',
-    maximumFractionDigits: 0
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
   }).format(amount || 0);
 }
 

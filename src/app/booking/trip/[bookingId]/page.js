@@ -146,7 +146,7 @@ export default function BookingTripPage() {
 
   const calculateNetProfit = () => {
     if (!booking) return 0;
-    const revenue = parseFloat(booking.bookingAmount) || 0;
+    const revenue = parseFloat(booking.totalRevenue ?? booking.bookingAmount) || 0;
     const expenses = calculateAllExpenses().total;
     return revenue - expenses;
   };
@@ -228,7 +228,7 @@ export default function BookingTripPage() {
   }
 
   const statusInfo = getStatusInfo(booking.status);
-  const balance = (parseFloat(booking.bookingAmount) || 0) - (parseFloat(booking.advance) || 0);
+  const balance = (parseFloat(booking.totalRevenue ?? booking.bookingAmount) || 0) - (parseFloat(booking.advance) || 0);
   const netProfit = calculateNetProfit();
   const fuelDetails = calculateFuelDetails();
   const allExpenses = calculateAllExpenses();
@@ -256,7 +256,7 @@ export default function BookingTripPage() {
                       </svg>
                     </Link>
                     <div>
-                      <h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-blue-600 to-emerald-600 bg-clip-text text-transparent">
+                      <a className="secondary-button report-controls" href={`/booking/report/${bookingId}`}>Customer / Company Reports</a><h1 className="text-2xl md:text-3xl font-bold bg-gradient-to-r from-blue-600 to-emerald-600 bg-clip-text text-transparent">
                         Booking #{booking.bookingId}
                       </h1>
                       <p className="text-gray-600 mt-1">
@@ -494,7 +494,7 @@ export default function BookingTripPage() {
                   <div className="space-y-3">
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-600">Trip Fare:</span>
-                      <span className="font-medium">₹{parseFloat(booking.bookingAmount || 0).toFixed(2)}</span>
+                      <span className="font-medium">₹{parseFloat(booking.totalRevenue ?? booking.bookingAmount ?? 0).toFixed(2)}</span>
                     </div>
                     
                     {booking.advance && parseFloat(booking.advance) > 0 && (
@@ -516,7 +516,7 @@ export default function BookingTripPage() {
                     <div className="pt-3 border-t border-blue-200">
                       <div className="flex justify-between text-lg font-bold">
                         <span className="text-gray-800">TOTAL PAYABLE:</span>
-                        <span className="text-emerald-700">₹{parseFloat(booking.bookingAmount || 0).toFixed(2)}</span>
+                        <span className="text-emerald-700">₹{parseFloat(booking.totalRevenue ?? booking.bookingAmount ?? 0).toFixed(2)}</span>
                       </div>
                     </div>
 
@@ -649,12 +649,12 @@ export default function BookingTripPage() {
                   <div className="bg-white/70 p-5 rounded-xl border border-green-100">
                     <div className="flex justify-between items-center mb-4">
                       <h4 className="text-lg font-semibold text-gray-700">Revenue</h4>
-                      <span className="text-2xl font-bold text-green-700">₹{parseFloat(booking.bookingAmount || 0).toFixed(2)}</span>
+                      <span className="text-2xl font-bold text-green-700">₹{parseFloat(booking.totalRevenue ?? booking.bookingAmount ?? 0).toFixed(2)}</span>
                     </div>
                     <div className="space-y-3">
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-600">Base Fare</span>
-                        <span className="font-medium">₹{parseFloat(booking.bookingAmount || 0).toFixed(2)}</span>
+                        <span className="font-medium">₹{parseFloat(booking.totalRevenue ?? booking.bookingAmount ?? 0).toFixed(2)}</span>
                       </div>
                       {booking.advance && parseFloat(booking.advance) > 0 && (
                         <div className="flex justify-between text-sm">
@@ -692,7 +692,7 @@ export default function BookingTripPage() {
                         ₹{Math.abs(netProfit).toFixed(2)}
                       </div>
                       <div className="mt-3 text-sm text-gray-600">
-                        Margin: {booking.bookingAmount > 0 ? ((netProfit / booking.bookingAmount) * 100).toFixed(2) : 0}%
+                        Margin: {(booking.totalRevenue ?? booking.bookingAmount) > 0 ? ((netProfit / (booking.totalRevenue ?? booking.bookingAmount)) * 100).toFixed(2) : 0}%
                       </div>
                     </div>
                   </div>
@@ -700,7 +700,7 @@ export default function BookingTripPage() {
                   {/* Profit Formula */}
                   <div className="bg-white/70 p-4 rounded-lg border border-gray-200">
                     <div className="text-sm text-gray-700 font-mono text-center">
-                      ₹{parseFloat(booking.bookingAmount || 0).toFixed(2)} (Revenue) - ₹{allExpenses.total.toFixed(2)} (Expenses) = ₹{netProfit.toFixed(2)} ({netProfit >= 0 ? 'Profit' : 'Loss'})
+                      ₹{parseFloat(booking.totalRevenue ?? booking.bookingAmount ?? 0).toFixed(2)} (Revenue) - ₹{allExpenses.total.toFixed(2)} (Expenses) = ₹{netProfit.toFixed(2)} ({netProfit >= 0 ? 'Profit' : 'Loss'})
                     </div>
                   </div>
                 </div>
@@ -727,7 +727,7 @@ export default function BookingTripPage() {
                 <div className="bg-white/90 backdrop-blur-sm rounded-xl p-5 border border-blue-200">
                   <div className="text-sm text-gray-600 mb-2">Expense Ratio</div>
                   <div className="text-2xl font-bold text-amber-600">
-                    {booking.bookingAmount > 0 ? ((allExpenses.total / booking.bookingAmount) * 100).toFixed(1) : 0}%
+                    {(booking.totalRevenue ?? booking.bookingAmount) > 0 ? ((allExpenses.total / (booking.totalRevenue ?? booking.bookingAmount)) * 100).toFixed(1) : 0}%
                   </div>
                   <div className="text-xs text-gray-500 mt-2">of revenue</div>
                 </div>

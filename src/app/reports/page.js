@@ -169,7 +169,7 @@ export default function ReportsPage() {
     let routeMap = {};
     
     completedBookings.forEach(booking => {
-      const revenue = parseFloat(booking.bookingAmount) || 0;
+      const revenue = parseFloat(booking.totalRevenue ?? booking.bookingAmount) || 0;
       const expenses = parseFloat(booking.totalExpenses) || 0;
       const profit = revenue - expenses;
       
@@ -223,8 +223,8 @@ export default function ReportsPage() {
       });
       
       const completedDayBookings = dayBookings.filter(b => b.status === 'completed');
-      const dayRevenue = completedDayBookings.reduce((sum, b) => sum + (parseFloat(b.bookingAmount) || 0), 0);
-      const dayProfit = completedDayBookings.reduce((sum, b) => sum + (parseFloat(b.bookingAmount) || 0) - (parseFloat(b.totalExpenses) || 0), 0);
+      const dayRevenue = completedDayBookings.reduce((sum, b) => sum + (parseFloat(b.totalRevenue ?? b.bookingAmount) || 0), 0);
+      const dayProfit = completedDayBookings.reduce((sum, b) => sum + (parseFloat(b.totalRevenue ?? b.bookingAmount) || 0) - (parseFloat(b.totalExpenses) || 0), 0);
       
       dailyStats.push({
         date: date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }),
@@ -250,8 +250,8 @@ export default function ReportsPage() {
       });
       
       const completedMonthBookings = monthBookings.filter(b => b.status === 'completed');
-      const monthRevenue = completedMonthBookings.reduce((sum, b) => sum + (parseFloat(b.bookingAmount) || 0), 0);
-      const monthProfit = completedMonthBookings.reduce((sum, b) => sum + (parseFloat(b.bookingAmount) || 0) - (parseFloat(b.totalExpenses) || 0), 0);
+      const monthRevenue = completedMonthBookings.reduce((sum, b) => sum + (parseFloat(b.totalRevenue ?? b.bookingAmount) || 0), 0);
+      const monthProfit = completedMonthBookings.reduce((sum, b) => sum + (parseFloat(b.totalRevenue ?? b.bookingAmount) || 0) - (parseFloat(b.totalExpenses) || 0), 0);
       
       monthlyStats.push({
         month: monthName,
@@ -372,10 +372,10 @@ export default function ReportsPage() {
       booking.vehicle || '',
       booking.driverName || '',
       booking.status || '',
-      booking.bookingAmount || 0,
+      booking.totalRevenue ?? booking.bookingAmount ?? 0,
       booking.advance || 0,
       booking.totalExpenses || 0,
-      (parseFloat(booking.bookingAmount || 0) - parseFloat(booking.totalExpenses || 0)).toFixed(2),
+      (parseFloat(booking.totalRevenue ?? booking.bookingAmount ?? 0) - parseFloat(booking.totalExpenses || 0)).toFixed(2),
       booking.outstanding || 0
     ]);
 
@@ -1058,7 +1058,7 @@ export default function ReportsPage() {
                 </thead>
                 <tbody>
                   {reportData.filteredData.map((booking) => {
-                    const revenue = parseFloat(booking.bookingAmount) || 0;
+                    const revenue = parseFloat(booking.totalRevenue ?? booking.bookingAmount) || 0;
                     const expenses = parseFloat(booking.totalExpenses) || 0;
                     const profit = revenue - expenses;
                     
